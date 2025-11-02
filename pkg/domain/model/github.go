@@ -3,7 +3,7 @@ package model
 import (
 	"regexp"
 
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 )
 

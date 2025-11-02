@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v53/github"
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/model/trivy"
@@ -154,12 +154,12 @@ func (x *UseCase) scanGitHubRepo(ctx context.Context, codeDir string) (*trivy.Re
 func unmarshalFile(path string, v any) error {
 	fd, err := os.Open(filepath.Clean(path))
 	if err != nil {
-		return goerr.Wrap(err, "failed to open file").With("path", path)
+		return goerr.Wrap(err, "failed to open file", goerr.V("path", path))
 	}
 	defer utils.SafeClose(fd)
 
 	if err := json.NewDecoder(fd).Decode(v); err != nil {
-		return goerr.Wrap(err, "failed to decode json").With("path", path)
+		return goerr.Wrap(err, "failed to decode json", goerr.V("path", path))
 	}
 
 	return nil
@@ -168,22 +168,29 @@ func unmarshalFile(path string, v any) error {
 func downloadZipFile(ctx context.Context, httpClient infra.HTTPClient, zipURL *url.URL, w io.Writer) error {
 	zipReq, err := http.NewRequestWithContext(ctx, http.MethodGet, zipURL.String(), nil)
 	if err != nil {
-		return goerr.Wrap(err, "failed to create request for zip file").With("url", zipURL)
+		return goerr.Wrap(err, "failed to create request for zip file", goerr.V("url", zipURL))
 	}
 
 	zipResp, err := httpClient.Do(zipReq)
 	if err != nil {
-		return goerr.Wrap(err, "failed to download zip file").With("url", zipURL)
+		return goerr.Wrap(err, "failed to download zip file", goerr.V("url", zipURL))
 	}
 	defer zipResp.Body.Close()
 
 	if zipResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(zipResp.Body)
-		return goerr.Wrap(types.ErrInvalidGitHubData, "failed to download zip file").With("url", zipURL).With("resp", zipResp).With("body", body)
+		return goerr.Wrap(types.ErrInvalidGitHubData, "failed to download zip file",
+			goerr.V("url", zipURL),
+			goerr.V("resp", zipResp),
+			goerr.V("body", body),
+		)
 	}
 
 	if _, err = io.Copy(w, zipResp.Body); err != nil {
-		return goerr.Wrap(err, "failed to write zip file").With("url", zipURL).With("resp", zipResp)
+		return goerr.Wrap(err, "failed to write zip file",
+			goerr.V("url", zipURL),
+			goerr.V("resp", zipResp),
+		)
 	}
 
 	return nil
@@ -192,7 +199,7 @@ func downloadZipFile(ctx context.Context, httpClient infra.HTTPClient, zipURL *u
 func extractZipFile(ctx context.Context, src, dst string) error {
 	zipFile, err := zip.OpenReader(src)
 	if err != nil {
-		return goerr.Wrap(err).With("file", src)
+		return goerr.Wrap(err, "failed to open zip file", goerr.V("file", src))
 	}
 	defer utils.SafeClose(zipFile)
 
@@ -218,30 +225,30 @@ func extractCode(_ context.Context, f *zip.File, dst string) error {
 
 	fpath := filepath.Join(dst, target)
 	if !strings.HasPrefix(fpath, filepath.Clean(dst)+string(os.PathSeparator)) {
-		return goerr.Wrap(types.ErrInvalidGitHubData, "illegal file path of zip").With("path", fpath)
+		return goerr.Wrap(types.ErrInvalidGitHubData, "illegal file path of zip", goerr.V("path", fpath))
 	}
 
 	if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
-		return goerr.Wrap(err, "failed to create directory").With("path", fpath)
+		return goerr.Wrap(err, "failed to create directory", goerr.V("path", fpath))
 	}
 
 	// #nosec
 	out, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 	if err != nil {
-		return goerr.Wrap(err).With("fpath", fpath)
+		return goerr.Wrap(err, "failed to open file", goerr.V("fpath", fpath))
 	}
 	defer utils.SafeClose(out)
 
 	rc, err := f.Open()
 	if err != nil {
-		return goerr.Wrap(err)
+		return goerr.Wrap(err, "failed to open zip entry")
 	}
 	defer utils.SafeClose(rc)
 
 	// #nosec
 	_, err = io.Copy(out, rc)
 	if err != nil {
-		return goerr.Wrap(err)
+		return goerr.Wrap(err, "failed to copy file content")
 	}
 
 	return nil

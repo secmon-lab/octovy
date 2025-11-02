@@ -9,7 +9,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/m-mizutani/bqs"
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/model/trivy"

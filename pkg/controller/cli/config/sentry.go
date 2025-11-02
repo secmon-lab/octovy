@@ -4,7 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/utils"
 	"github.com/urfave/cli/v2"
 )

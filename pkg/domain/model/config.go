@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 )
 
 type Config struct {
@@ -86,7 +86,7 @@ func LoadConfigsFromDir(path string) (*Config, error) {
 		if filepath.Ext(filepath.Clean(filePath)) == ".cue" {
 			data, err := os.ReadFile(filepath.Clean(filePath))
 			if err != nil {
-				return goerr.Wrap(err, "failed to read file").With("path", filePath)
+				return goerr.Wrap(err, "failed to read file", goerr.V("path", filePath))
 			}
 			configData = append(configData, data)
 		}

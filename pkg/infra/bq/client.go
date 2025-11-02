@@ -7,7 +7,7 @@ import (
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/bigquery/storage/managedwriter"
 	"cloud.google.com/go/bigquery/storage/managedwriter/adapt"
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"github.com/m-mizutani/octovy/pkg/utils"
@@ -31,12 +31,12 @@ var _ interfaces.BigQuery = (*Client)(nil)
 func New(ctx context.Context, projectID types.GoogleProjectID, datasetID types.BQDatasetID, options ...option.ClientOption) (*Client, error) {
 	mwClient, err := managedwriter.NewClient(ctx, projectID.String(), options...)
 	if err != nil {
-		return nil, goerr.Wrap(err, "failed to create bigquery client").With("projectID", projectID)
+		return nil, goerr.Wrap(err, "failed to create bigquery client", goerr.V("projectID", projectID))
 	}
 
 	bqClient, err := bigquery.NewClient(ctx, string(projectID), options...)
 	if err != nil {
-		return nil, goerr.Wrap(err, "failed to create BigQuery client").With("projectID", projectID)
+		return nil, goerr.Wrap(err, "failed to create BigQuery client", goerr.V("projectID", projectID))
 	}
 
 	return &Client{
@@ -50,7 +50,7 @@ func New(ctx context.Context, projectID types.GoogleProjectID, datasetID types.B
 // CreateTable implements interfaces.BigQuery.
 func (x *Client) CreateTable(ctx context.Context, table types.BQTableID, md *bigquery.TableMetadata) error {
 	if err := x.bqClient.Dataset(x.dataset).Table(table.String()).Create(ctx, md); err != nil {
-		return goerr.Wrap(err, "failed to create table").With("dataset", x.dataset).With("table", table)
+		return goerr.Wrap(err, "failed to create table", goerr.V("dataset", x.dataset), goerr.V("table", table))
 	}
 	return nil
 }
@@ -62,7 +62,7 @@ func (x *Client) GetMetadata(ctx context.Context, table types.BQTableID) (*bigqu
 		if gErr, ok := err.(*googleapi.Error); ok && gErr.Code == 404 {
 			return nil, nil
 		}
-		return nil, goerr.Wrap(err, "failed to get table metadata").With("dataset", x.dataset).With("table", table)
+		return nil, goerr.Wrap(err, "failed to get table metadata", goerr.V("dataset", x.dataset), goerr.V("table", table))
 	}
 
 	return md, nil
@@ -92,13 +92,13 @@ func (x *Client) Insert(ctx context.Context, table types.BQTableID, schema bigqu
 
 	raw, err := json.Marshal(data)
 	if err != nil {
-		return goerr.Wrap(err, "failed to Marshal json message").With("v", data)
+		return goerr.Wrap(err, "failed to Marshal json message", goerr.V("v", data))
 	}
 
 	// First, json->proto message
 	err = protojson.Unmarshal(raw, message)
 	if err != nil {
-		return goerr.Wrap(err, "failed to Unmarshal json message").With("raw", string(raw))
+		return goerr.Wrap(err, "failed to Unmarshal json message", goerr.V("raw", string(raw)))
 	}
 	// Then, proto message -> bytes.
 	b, err := proto.Marshal(message)
@@ -139,7 +139,7 @@ func (x *Client) Insert(ctx context.Context, table types.BQTableID, schema bigqu
 // UpdateTable implements interfaces.BigQuery.
 func (x *Client) UpdateTable(ctx context.Context, table types.BQTableID, md bigquery.TableMetadataToUpdate, eTag string) error {
 	if _, err := x.bqClient.Dataset(x.dataset).Table(table.String()).Update(ctx, md, eTag); err != nil {
-		return goerr.Wrap(err, "failed to update table").With("dataset", x.dataset).With("table", table).With("meta", md)
+		return goerr.Wrap(err, "failed to update table", goerr.V("dataset", x.dataset), goerr.V("table", table), goerr.V("meta", md))
 	}
 
 	return nil
