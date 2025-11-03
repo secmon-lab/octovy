@@ -99,7 +99,7 @@ func (x *Client) GetArchiveURL(ctx context.Context, input *interfaces.GetArchive
 	}
 	if r.StatusCode != http.StatusFound {
 		body, _ := io.ReadAll(r.Body)
-		return nil, goerr.Wrap(err, "Failed to get archive link", goerr.V("status", r.StatusCode), goerr.V("body", string(body)))
+		return nil, goerr.New("Failed to get archive link", goerr.V("status", r.StatusCode), goerr.V("body", string(body)))
 	}
 
 	utils.CtxLogger(ctx).Debug("GetArchiveLink response", slog.Any("url", url), slog.Any("r", r))
@@ -118,7 +118,7 @@ func (x *Client) CreateIssue(ctx context.Context, id types.GitHubAppInstallID, r
 		return nil, goerr.Wrap(err, "Failed to create github comment", goerr.V("repo", repo), goerr.V("req", req))
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return nil, goerr.Wrap(err, "failed to create issue", goerr.V("repo", repo), goerr.V("req", req), goerr.V("resp", resp))
+		return nil, goerr.New("failed to create issue", goerr.V("repo", repo), goerr.V("req", req), goerr.V("resp", resp))
 	}
 
 	return issue, nil
@@ -137,7 +137,7 @@ func (x *Client) CreateIssueComment(ctx context.Context, repo *model.GitHubRepo,
 		return goerr.Wrap(err, "Failed to create github comment", goerr.V("repo", repo), goerr.V("prID", prID), goerr.V("comment", comment))
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return goerr.Wrap(err, "Failed to ")
+		return goerr.New("Failed to create comment", goerr.V("repo", repo), goerr.V("prID", prID), goerr.V("status", resp.StatusCode))
 	}
 	utils.Logger().Debug("Commented to PR", "comment", ret)
 
@@ -263,7 +263,7 @@ func (x *Client) queryGraphQL(ctx context.Context, id types.GitHubAppInstallID, 
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, goerr.Wrap(err, "Failed to get graphQL response", goerr.V("req", httpReq), goerr.V("resp", resp), goerr.V("body", string(body)))
+		return nil, goerr.New("Failed to get graphQL response", goerr.V("req", httpReq), goerr.V("resp", resp), goerr.V("body", string(body)))
 	}
 
 	var gqlResp gqlResponse
@@ -304,7 +304,7 @@ func (x *Client) CreateCheckRun(ctx context.Context, id types.GitHubAppInstallID
 		return 0, goerr.Wrap(err, "Failed to create check run", goerr.V("repo", repo), goerr.V("commit", commit))
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return 0, goerr.Wrap(err, "Failed to ")
+		return 0, goerr.New("Failed to create check run", goerr.V("repo", repo), goerr.V("commit", commit), goerr.V("status", resp.StatusCode))
 	}
 	utils.CtxLogger(ctx).With("run", run).Debug("Created check run")
 
@@ -327,7 +327,7 @@ func (x *Client) UpdateCheckRun(ctx context.Context, id types.GitHubAppInstallID
 		return goerr.Wrap(err, "Failed to update check status to complete", goerr.V("repo", repo), goerr.V("id", checkID), goerr.V("opt", opt))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return goerr.Wrap(err, "Failed to update status to complete")
+		return goerr.New("Failed to update status to complete", goerr.V("repo", repo), goerr.V("checkID", checkID), goerr.V("status", resp.StatusCode))
 	}
 	utils.CtxLogger(ctx).Debug("Updated check run",
 		slog.Any("opt", opt),
