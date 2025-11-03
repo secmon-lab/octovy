@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/opac"
 	"github.com/urfave/cli/v2"
 )
@@ -28,7 +28,7 @@ func (x *Policy) Configure() (*opac.Client, error) {
 
 	client, err := opac.New(opac.Files(x.files.Value()...))
 	if err != nil {
-		return nil, goerr.Wrap(err, "Failed to initialize policy engine").With("files", x.files.Value())
+		return nil, goerr.Wrap(err, "Failed to initialize policy engine", goerr.V("files", x.files.Value()))
 	}
 
 	return client, nil

@@ -15,7 +15,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/m-mizutani/bqs v0.1.0
 	github.com/m-mizutani/clog v0.0.8
-	github.com/m-mizutani/goerr v1.0.0
+	github.com/m-mizutani/goerr/v2 v2.0.0
 	github.com/m-mizutani/gots v0.0.0-20230529013424-0639119b2cdd
 	github.com/m-mizutani/gt v0.0.10
 	github.com/m-mizutani/masq v0.1.11
@@ -66,7 +66,6 @@ require (
 	github.com/k0kubun/pp/v3 v3.5.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/m-mizutani/goerr/v2 v2.0.0-beta.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

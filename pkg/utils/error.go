@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 )
 
 func HandleError(ctx context.Context, msg string, err error) {

@@ -5,7 +5,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/utils"
 )
 
@@ -35,9 +35,7 @@ func (x *clientImpl) Run(ctx context.Context, args []string) error {
 
 	if err := cmd.Run(); err != nil {
 		utils.CtxLogger(ctx).With("stderr", stderr.String()).With("stdout", stdout.String()).Error("trivy failed")
-		return goerr.Wrap(err, "executing trivy").
-			With("stderr", stderr.String()).
-			With("stdout", stdout.String())
+		return goerr.Wrap(err, "executing trivy", goerr.V("stderr", stderr.String()), goerr.V("stdout", stdout.String()))
 	}
 
 	return nil

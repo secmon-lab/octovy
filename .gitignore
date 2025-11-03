@@ -14,3 +14,4 @@ trivy.db
 octovy
 .env*
 .vscode
+.cckiro

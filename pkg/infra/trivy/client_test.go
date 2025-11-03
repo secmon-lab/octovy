@@ -42,7 +42,7 @@ func Test(t *testing.T) {
 	gt.A(t, report.Results).Longer(0).Any(func(v trivy_model.Result) bool {
 		if v.Target == "go.mod" {
 			gt.A(t, v.Packages).Any(func(v trivy_model.Package) bool {
-				return v.Name == "github.com/m-mizutani/goerr"
+				return v.Name == "github.com/m-mizutani/goerr/v2"
 			})
 		}
 

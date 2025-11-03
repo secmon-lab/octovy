@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gots/slice"
 	"github.com/m-mizutani/octovy/pkg/controller/cli/config"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
@@ -76,7 +76,7 @@ func insertCommand() *cli.Command {
 			default:
 				f, err := os.Open(filepath.Clean(filePath))
 				if err != nil {
-					return goerr.Wrap(err).With("file", filePath)
+					return goerr.Wrap(err, "failed to open file", goerr.V("file", filePath))
 				}
 				defer f.Close()
 				r = f
@@ -88,7 +88,7 @@ func insertCommand() *cli.Command {
 			}
 
 			if err := uc.InsertScanResult(ctx, meta, report, model.Config{}); err != nil {
-				return goerr.Wrap(err).With("file", filePath)
+				return goerr.Wrap(err, "failed to insert scan result", goerr.V("file", filePath))
 			}
 
 			return nil

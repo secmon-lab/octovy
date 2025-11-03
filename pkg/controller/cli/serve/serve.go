@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gots/slice"
 	"github.com/m-mizutani/octovy/pkg/controller/cli/config"
 	"github.com/m-mizutani/octovy/pkg/controller/server"

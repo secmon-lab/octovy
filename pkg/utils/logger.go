@@ -9,7 +9,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/m-mizutani/clog"
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/masq"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 )
@@ -41,7 +41,7 @@ func ReconfigureLogger(logFormat, logLevel, logOutput string) error {
 
 	level, ok := levelMap[logLevel]
 	if !ok {
-		return goerr.Wrap(types.ErrInvalidOption, "invalid log level").With("value", logLevel)
+		return goerr.Wrap(types.ErrInvalidOption, "invalid log level", goerr.V("value", logLevel))
 	}
 
 	var w io.Writer
@@ -53,7 +53,7 @@ func ReconfigureLogger(logFormat, logLevel, logOutput string) error {
 	default:
 		fd, err := os.Create(filepath.Clean(logOutput))
 		if err != nil {
-			return goerr.Wrap(err, "failed to open log file").With("path", logOutput)
+			return goerr.Wrap(err, "failed to open log file", goerr.V("path", logOutput))
 		}
 		w = fd
 	}
@@ -91,7 +91,7 @@ func ReconfigureLogger(logFormat, logLevel, logOutput string) error {
 		})
 
 	default:
-		return goerr.Wrap(types.ErrInvalidOption, "invalid log format, should be 'json' or 'text'").With("value", logFormat)
+		return goerr.Wrap(types.ErrInvalidOption, "invalid log format, should be 'json' or 'text'", goerr.V("value", logFormat))
 	}
 
 	logger = slog.New(handler)

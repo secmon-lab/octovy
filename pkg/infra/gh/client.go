@@ -12,7 +12,7 @@ import (
 
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/google/go-github/v53/github"
-	"github.com/m-mizutani/goerr"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
@@ -95,11 +95,11 @@ func (x *Client) GetArchiveURL(ctx context.Context, input *interfaces.GetArchive
 	// https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#get-archive-link
 	url, r, err := client.Repositories.GetArchiveLink(ctx, input.Owner, input.Repo, github.Zipball, opt, false)
 	if err != nil {
-		return nil, goerr.Wrap(err)
+		return nil, goerr.Wrap(err, "failed to get archive link")
 	}
 	if r.StatusCode != http.StatusFound {
 		body, _ := io.ReadAll(r.Body)
-		return nil, goerr.Wrap(err, "Failed to get archive link").With("status", r.StatusCode).With("body", string(body))
+		return nil, goerr.New("Failed to get archive link", goerr.V("status", r.StatusCode), goerr.V("body", string(body)))
 	}
 
 	utils.CtxLogger(ctx).Debug("GetArchiveLink response", slog.Any("url", url), slog.Any("r", r))
@@ -115,10 +115,10 @@ func (x *Client) CreateIssue(ctx context.Context, id types.GitHubAppInstallID, r
 
 	issue, resp, err := client.Issues.Create(ctx, repo.Owner, repo.RepoName, req)
 	if err != nil {
-		return nil, goerr.Wrap(err, "Failed to create github comment").With("repo", repo).With("req", req)
+		return nil, goerr.Wrap(err, "Failed to create github comment", goerr.V("repo", repo), goerr.V("req", req))
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return nil, goerr.Wrap(err, "failed to create issue").With("repo", repo).With("req", req).With("resp", resp)
+		return nil, goerr.New("failed to create issue", goerr.V("repo", repo), goerr.V("req", req), goerr.V("resp", resp))
 	}
 
 	return issue, nil
@@ -134,10 +134,10 @@ func (x *Client) CreateIssueComment(ctx context.Context, repo *model.GitHubRepo,
 
 	ret, resp, err := client.Issues.CreateComment(ctx, repo.Owner, repo.RepoName, prID, comment)
 	if err != nil {
-		return goerr.Wrap(err, "Failed to create github comment").With("repo", repo).With("prID", prID).With("comment", comment)
+		return goerr.Wrap(err, "Failed to create github comment", goerr.V("repo", repo), goerr.V("prID", prID), goerr.V("comment", comment))
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return goerr.Wrap(err, "Failed to ")
+		return goerr.New("Failed to create comment", goerr.V("repo", repo), goerr.V("prID", prID), goerr.V("status", resp.StatusCode))
 	}
 	utils.Logger().Debug("Commented to PR", "comment", ret)
 
@@ -249,30 +249,30 @@ func (x *Client) queryGraphQL(ctx context.Context, id types.GitHubAppInstallID, 
 
 	rawReq, err := json.Marshal(req)
 	if err != nil {
-		return nil, goerr.Wrap(err, "Failed to marshal graphQL request").With("req", req)
+		return nil, goerr.Wrap(err, "Failed to marshal graphQL request", goerr.V("req", req))
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiGraphQLEndpoint, bytes.NewReader(rawReq))
 	if err != nil {
-		return nil, goerr.Wrap(err, "Failed to create graphQL request").With("req", req)
+		return nil, goerr.Wrap(err, "Failed to create graphQL request", goerr.V("req", req))
 	}
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, goerr.Wrap(err, "Failed to send graphQL request").With("req", req)
+		return nil, goerr.Wrap(err, "Failed to send graphQL request", goerr.V("req", req))
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, goerr.Wrap(err, "Failed to get graphQL response").With("req", httpReq).With("resp", resp).With("body", string(body))
+		return nil, goerr.New("Failed to get graphQL response", goerr.V("req", httpReq), goerr.V("resp", resp), goerr.V("body", string(body)))
 	}
 
 	var gqlResp gqlResponse
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, goerr.Wrap(err, "Failed to read response body").With("resp", resp)
+		return nil, goerr.Wrap(err, "Failed to read response body", goerr.V("resp", resp))
 	}
 	if err := json.Unmarshal(body, &gqlResp); err != nil {
-		return nil, goerr.Wrap(err, "Failed to decode response").With("resp", resp)
+		return nil, goerr.Wrap(err, "Failed to decode response", goerr.V("resp", resp))
 	}
 
 	return &gqlResp, nil
@@ -301,10 +301,10 @@ func (x *Client) CreateCheckRun(ctx context.Context, id types.GitHubAppInstallID
 
 	run, resp, err := client.Checks.CreateCheckRun(ctx, repo.Owner, repo.RepoName, opt)
 	if err != nil {
-		return 0, goerr.Wrap(err, "Failed to create check run").With("repo", repo).With("commit", commit)
+		return 0, goerr.Wrap(err, "Failed to create check run", goerr.V("repo", repo), goerr.V("commit", commit))
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return 0, goerr.Wrap(err, "Failed to ")
+		return 0, goerr.New("Failed to create check run", goerr.V("repo", repo), goerr.V("commit", commit), goerr.V("status", resp.StatusCode))
 	}
 	utils.CtxLogger(ctx).With("run", run).Debug("Created check run")
 
@@ -324,10 +324,10 @@ func (x *Client) UpdateCheckRun(ctx context.Context, id types.GitHubAppInstallID
 
 	_, resp, err := client.Checks.UpdateCheckRun(ctx, repo.Owner, repo.RepoName, checkID, *opt)
 	if err != nil {
-		return goerr.Wrap(err, "Failed to update check status to complete").With("repo", repo).With("id", checkID).With("opt", opt)
+		return goerr.Wrap(err, "Failed to update check status to complete", goerr.V("repo", repo), goerr.V("id", checkID), goerr.V("opt", opt))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return goerr.Wrap(err, "Failed to update status to complete")
+		return goerr.New("Failed to update status to complete", goerr.V("repo", repo), goerr.V("checkID", checkID), goerr.V("status", resp.StatusCode))
 	}
 	utils.CtxLogger(ctx).Debug("Updated check run",
 		slog.Any("opt", opt),

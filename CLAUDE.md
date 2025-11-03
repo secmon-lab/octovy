@@ -97,17 +97,29 @@ docker run -p 8080:8080 -v /path/to/private-key.pem:/key.pem \
 ## Code Patterns
 
 ### Error Handling
-Uses `github.com/m-mizutani/goerr` for wrapped errors with context. Pattern:
+Uses `github.com/m-mizutani/goerr/v2` for wrapped errors with context. Patterns:
 ```go
-if err != nil {
-    return goerr.Wrap(err, "description").With("key", value)
-}
+// Create error with context
+return goerr.New("validation failed", goerr.V("user_id", userID))
+
+// Wrap error with context
+return goerr.Wrap(err, "operation failed", goerr.V("key", value))
+
+// Multiple context values
+return goerr.Wrap(err, "failed to process",
+    goerr.V("file", filename),
+    goerr.V("line", lineNum),
+)
 ```
 
+Note: goerr v2 requires message as second argument to `Wrap()`. Context values are added as variadic `goerr.V()` or `goerr.Value()` arguments, not via `.With()` method chains.
+
 ### Logging
-Structured logging via `utils.Logger()` (slog-based) and `utils.CtxLogger(ctx)` for context-aware logging.
+Structured logging via `utils.Logger()` (log/slog) and `utils.CtxLogger(ctx)` for context-aware logging. Supports both text and JSON formats via `OCTOVY_LOG_FORMAT` environment variable.
 
 ### Testing
+- Uses `github.com/m-mizutani/gt` test framework for assertions
+- Common patterns: `gt.V(t, actual).Equal(expected)`, `gt.NoError(t, err)`, `gt.R1(fn()).NoError(t)`
 - Mock interfaces generated via `moq` in [pkg/domain/mock/](pkg/domain/mock/)
 - Test helpers in [pkg/utils/test.go](pkg/utils/test.go)
 - Use `--tags github` build tag for tests requiring GitHub integration
