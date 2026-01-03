@@ -88,11 +88,13 @@ func TestInsertScanResult(t *testing.T) {
 		gt.NoError(t, err)
 		gt.V(t, string(branch.Name)).Equal("main")
 
-		target, err := memRepo.GetTarget(ctx, repoID, "main", "test-target")
+		targetID := model.ToTargetID("test-target")
+		target, err := memRepo.GetTarget(ctx, repoID, "main", targetID)
 		gt.NoError(t, err)
-		gt.V(t, string(target.ID)).Equal("test-target")
+		gt.V(t, target.ID).Equal(targetID)
+		gt.V(t, target.Target).Equal("test-target")
 
-		vulns, err := memRepo.ListVulnerabilities(ctx, repoID, "main", "test-target")
+		vulns, err := memRepo.ListVulnerabilities(ctx, repoID, "main", targetID)
 		gt.NoError(t, err)
 		gt.V(t, len(vulns)).Equal(1)
 		gt.V(t, vulns[0].ID).Equal("CVE-2024-0001")
@@ -282,7 +284,7 @@ func TestInsertScanResult(t *testing.T) {
 
 		repoID := types.GitHubRepoID("test-owner/test-repo")
 		branchName := types.BranchName("main")
-		targetID := types.TargetID("go.mod")
+		targetID := model.ToTargetID("go.mod")
 
 		// Scenario 1: First scan - new vulnerabilities should be Active
 		report1 := trivy.Report{

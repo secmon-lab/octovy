@@ -123,7 +123,7 @@ func (x *UseCase) insertToFirestore(ctx context.Context, meta model.GitHubMetada
 	// Process each target (Result) in the report
 	for _, result := range report.Results {
 		// Create or update target
-		targetID := types.TargetID(result.Target)
+		targetID := model.ToTargetID(result.Target)
 		target := &model.Target{
 			ID:        targetID,
 			Target:    result.Target,
