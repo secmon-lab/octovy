@@ -15,3 +15,5 @@ octovy
 .env*
 .vscode
 .cckiro
+.task
+

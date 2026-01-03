@@ -1,15 +1,10 @@
 # Octovy
 
-Octovy is a GitHub App that scans your repository's code for potentially vulnerable dependencies. It utilizes [trivy](https://github.com/aquasecurity/trivy) to detect software vulnerabilities. When triggered by events like `push` and `pull_request` from GitHub, Octovy scans the repository for dependency vulnerabilities and performs the following actions:
-
-- Adds a comment to the pull request, summarizing the vulnerabilities found
-- Inserts the scan results into BigQuery
+Octovy is a GitHub App that scans your repository's code for potentially vulnerable dependencies. It utilizes [trivy](https://github.com/aquasecurity/trivy) to detect software vulnerabilities. When triggered by events like `push` and `pull_request` from GitHub, Octovy scans the repository for dependency vulnerabilities and inserts the scan results into BigQuery.
 
 ![architecture](https://github.com/m-mizutani/octovy/assets/605953/4366161f-a4ff-4abb-9766-0fb4df818cb1)
 
-Octovy adds a comment to the pull request when it detects new vulnerabilities between the head of the PR and the merge destination.
-
-<img width="755" alt="comment example" src="https://github.com/m-mizutani/octovy/assets/605953/052a6362-c284-4857-921c-5c3c2f32065b">
+Octovy can also be used as a CLI tool to scan local directories and insert results into BigQuery.
 
 ## Setup
 
@@ -18,15 +13,13 @@ Octovy adds a comment to the pull request when it detects new vulnerabilities be
 Start by creating a GitHub App [here](https://github.com/settings/apps). You can use any name and description you like. However, ensure you set the following configurations:
 
 - **General**
-  - **Webhook URL**: `https://<your domain>/webhook/github`
+  - **Webhook URL**: `https://<your domain>/webhook/github/app`
   - **Webhook secret**: A string of your choosing (e.g. `mysecret_XOIJPOIFEA`)
 
 - **Permissions & events**
   - Repository Permissions
-    - **Checks**: Set to Read & Write
     - **Contents**: Set to Read-only
     - **Metadata**: Set to Read-only
-    - **Pull Requests**: Set to Read & Write
   - Subscribe to events
     - **Pull request**
     - **Push**
@@ -38,8 +31,7 @@ Once you have completed the setup, make sure to take note of the following infor
 
 ### 2. Setting Up Cloud Resources
 
-- **Cloud Storage**: Create a Cloud Storage bucket dedicated to storing the scan results exclusively for Octovy's use.
-- **BigQuery** (Optional): Create a BigQuery dataset and table for storing the scan results. Octovy will automatically update the schema. The default table name should be `scans`.
+- **BigQuery** (Optional): Create a BigQuery dataset for storing the scan results. Octovy will automatically create and update the table schema. The default dataset name is `octovy` and the default table name is `scans`.
 
 ### 3. Deploying Octovy
 
@@ -52,17 +44,58 @@ To run Octovy, set the following environment variables:
 - `OCTOVY_GITHUB_APP_ID`: The GitHub App ID
 - `OCTOVY_GITHUB_APP_PRIVATE_KEY`: The path to the private key file
 - `OCTOVY_GITHUB_APP_SECRET`: The secret string used to verify the webhook request from GitHub
-- `OCTOVY_CLOUD_STORAGE_BUCKET`: The name of the Cloud Storage bucket
 
 #### Optional Environment Variables
-- `OCTOVY_TRIVY_PATH`: The path to the trivy binary. If you uses the our container image, you don't need to set this variable.
-- `OCTOVY_CLOUD_STORAGE_PREFIX`: The prefix for the Cloud Storage object
-- `OCTOVY_BIGQUERY_PROJECT_ID`: The name of the BigQuery dataset
-- `OCTOVY_BIGQUERY_DATASET_ID`: The name of the BigQuery table
-- `OCTOVY_BIGQUERY_TABLE_ID`: The name of the BigQuery table
+- `OCTOVY_TRIVY_PATH`: The path to the trivy binary (default: `trivy`). If you use the container image, you don't need to set this variable.
+- `OCTOVY_BIGQUERY_PROJECT_ID`: The BigQuery project ID
+- `OCTOVY_BIGQUERY_DATASET_ID`: The BigQuery dataset ID (default: `octovy`)
+- `OCTOVY_BIGQUERY_TABLE_ID`: The BigQuery table ID (default: `scans`)
 - `OCTOVY_BIGQUERY_IMPERSONATE_SERVICE_ACCOUNT`: The service account to impersonate when accessing BigQuery
+- `OCTOVY_LOG_FORMAT`: Log format (`text` or `json`, default: `text`)
 - `OCTOVY_SENTRY_DSN`: The DSN for Sentry
 - `OCTOVY_SENTRY_ENV`: The environment for Sentry
+
+## Usage
+
+### CLI: Scan Local Directory
+
+Octovy can be used as a CLI tool to scan local directories and insert results into BigQuery:
+
+```bash
+# Scan current directory (auto-detects GitHub metadata from git)
+octovy scan
+
+# Scan specific directory
+octovy scan --dir /path/to/repo
+
+# Specify GitHub metadata explicitly
+octovy scan --github-owner myorg --github-repo myrepo --github-commit-id abc123
+
+# With BigQuery configuration
+octovy scan \
+  --bigquery-project-id my-project \
+  --bigquery-dataset-id my-dataset \
+  --bigquery-table-id scans
+```
+
+The `scan` command will:
+1. Auto-detect GitHub metadata (owner, repo, commit ID) from git if not explicitly provided
+2. Run Trivy on the specified directory
+3. Insert scan results into BigQuery (if BigQuery is configured)
+
+### Server: GitHub App Webhook
+
+Run the server to receive GitHub webhook events:
+
+```bash
+octovy serve --addr :8080
+```
+
+The server will:
+1. Receive webhook events from GitHub (`push` and `pull_request`)
+2. Download the repository code
+3. Run Trivy scan
+4. Insert results into BigQuery (if configured)
 
 ## Configuration
 

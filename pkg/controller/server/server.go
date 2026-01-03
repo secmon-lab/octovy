@@ -8,7 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
-	"github.com/m-mizutani/octovy/pkg/utils"
+	"github.com/m-mizutani/octovy/pkg/utils/errutil"
+	"github.com/m-mizutani/octovy/pkg/utils/logging"
 )
 
 type Server struct {
@@ -21,7 +22,7 @@ func safeWrite(w http.ResponseWriter, code int, body []byte) {
 	// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 	// Why: The response data is not from user input
 	if _, err := w.Write(body); err != nil {
-		utils.Logger().Error("fail to write response", slog.Any("error", err))
+		logging.Default().Error("fail to write response", slog.Any("error", err))
 	}
 }
 
@@ -52,7 +53,7 @@ func New(uc interfaces.UseCase, options ...Option) *Server {
 		r.Route("/github", func(r chi.Router) {
 			r.Post("/app", func(w http.ResponseWriter, r *http.Request) {
 				if err := handleGitHubAppEvent(uc, r, cfg.ghSecret); err != nil {
-					utils.HandleError(r.Context(), "fail to handle GitHub App event", err)
+					errutil.HandleError(r.Context(), "fail to handle GitHub App event", err)
 					safeWrite(w, http.StatusInternalServerError, []byte(err.Error()))
 					return
 				}
@@ -61,7 +62,7 @@ func New(uc interfaces.UseCase, options ...Option) *Server {
 			})
 			r.Post("/action", func(w http.ResponseWriter, r *http.Request) {
 				if err := handleGitHubActionEvent(uc, r); err != nil {
-					utils.HandleError(r.Context(), "fail to handle GitHub action event", err)
+					errutil.HandleError(r.Context(), "fail to handle GitHub action event", err)
 					safeWrite(w, http.StatusInternalServerError, []byte(err.Error()))
 					return
 				}

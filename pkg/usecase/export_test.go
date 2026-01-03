@@ -1,13 +1,12 @@
 package usecase
 
-import (
-	"context"
-
-	"github.com/m-mizutani/octovy/pkg/domain/model"
+// Export unexported functions for testing
+var (
+	DownloadZipFileForTest   = downloadZipFile
+	ExtractCodeForTest       = extractCode
+	StepDownDirectoryForTest = stepDownDirectory
+	ExtractZipFileForTest    = extractZipFile
+	UnmarshalFileForTest     = unmarshalFile
+	CreateOrUpdateBigQueryTableForTest = createOrUpdateBigQueryTable
 )
 
-var RenderScanReport = renderScanReport
-
-func (x *UseCase) HideGitHubOldComments(ctx context.Context, input *model.ScanGitHubRepoInput) error {
-	return x.hideGitHubOldComments(ctx, input)
-}

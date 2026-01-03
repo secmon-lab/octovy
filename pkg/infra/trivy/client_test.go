@@ -49,3 +49,30 @@ func Test(t *testing.T) {
 		return v.Target == "go.mod"
 	})
 }
+
+func TestRunWithInvalidPath(t *testing.T) {
+	path, ok := os.LookupEnv("TEST_TRIVY_PATH")
+	if !ok {
+		t.Skip("TEST_TRIVY_PATH is not set")
+	}
+
+	client := trivy.New(path)
+	ctx := context.Background()
+
+	t.Run("scan non-existent directory returns error", func(t *testing.T) {
+		err := client.Run(ctx, []string{
+			"fs",
+			"/non/existent/path/that/does/not/exist",
+			"-f", "json",
+			"-o", "/tmp/output.json",
+		})
+		gt.Error(t, err)
+	})
+
+	t.Run("invalid trivy command returns error", func(t *testing.T) {
+		err := client.Run(ctx, []string{
+			"invalid-command",
+		})
+		gt.Error(t, err)
+	})
+}

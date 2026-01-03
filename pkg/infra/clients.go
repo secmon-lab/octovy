@@ -8,12 +8,10 @@ import (
 )
 
 type Clients struct {
-	githubApp   interfaces.GitHub
+	githubApp   interfaces.GitHubApp
 	httpClient  HTTPClient
 	trivyClient trivy.Client
 	bqClient    interfaces.BigQuery
-	storage     interfaces.Storage
-	policy      interfaces.Policy
 }
 
 type HTTPClient interface {
@@ -35,7 +33,7 @@ func New(options ...Option) *Clients {
 	return client
 }
 
-func (x *Clients) GitHubApp() interfaces.GitHub {
+func (x *Clients) GitHubApp() interfaces.GitHubApp {
 	return x.githubApp
 }
 func (x *Clients) HTTPClient() HTTPClient {
@@ -47,14 +45,8 @@ func (x *Clients) Trivy() trivy.Client {
 func (x *Clients) BigQuery() interfaces.BigQuery {
 	return x.bqClient
 }
-func (x *Clients) Storage() interfaces.Storage {
-	return x.storage
-}
-func (x *Clients) Policy() interfaces.Policy {
-	return x.policy
-}
 
-func WithGitHubApp(client interfaces.GitHub) Option {
+func WithGitHubApp(client interfaces.GitHubApp) Option {
 	return func(x *Clients) {
 		x.githubApp = client
 	}
@@ -75,17 +67,5 @@ func WithTrivy(client trivy.Client) Option {
 func WithBigQuery(client interfaces.BigQuery) Option {
 	return func(x *Clients) {
 		x.bqClient = client
-	}
-}
-
-func WithStorage(client interfaces.Storage) Option {
-	return func(x *Clients) {
-		x.storage = client
-	}
-}
-
-func WithPolicy(client interfaces.Policy) Option {
-	return func(x *Clients) {
-		x.policy = client
 	}
 }

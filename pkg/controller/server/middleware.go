@@ -7,16 +7,19 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	"github.com/m-mizutani/octovy/pkg/utils"
+	"github.com/m-mizutani/octovy/pkg/utils/logging"
 )
 
 func preProcess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger := utils.Logger().With(slog.String("request_id", uuid.NewString()))
+		logger := logging.Default().With(slog.String("request_id", uuid.NewString()))
 
-		ctx := utils.CtxWithLogger(r.Context(), logger)
+		ctx := logging.With(r.Context(), logger)
 
-		lw := &statusCodeLogger{ResponseWriter: w}
+		lw := &statusCodeLogger{
+			ResponseWriter: w,
+			statusCode:     http.StatusOK, // Default to 200 if WriteHeader is not called
+		}
 
 		requestedAt := time.Now()
 		next.ServeHTTP(lw, r.WithContext(ctx))

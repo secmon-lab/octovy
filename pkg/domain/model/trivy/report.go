@@ -7,6 +7,9 @@ import (
 
 type Report struct {
 	SchemaVersion int          `json:",omitempty"`
+	ReportID      string       `json:",omitempty"`
+	CreatedAt     string       `json:",omitempty"`
+	ArtifactID    string       `json:",omitempty"`
 	ArtifactName  string       `json:",omitempty"`
 	ArtifactType  ArtifactType `json:",omitempty"`
 	Metadata      Metadata     `json:",omitempty"`
@@ -27,11 +30,19 @@ type Metadata struct {
 	OS   *OS   `json:",omitempty"`
 
 	// Container image
-	ImageID     string     `json:",omitempty"`
-	DiffIDs     []string   `json:",omitempty"`
-	RepoTags    []string   `json:",omitempty"`
-	RepoDigests []string   `json:",omitempty"`
-	ImageConfig ConfigFile `json:",omitempty"`
+	ImageID     string      `json:",omitempty"`
+	DiffIDs     []string    `json:",omitempty"`
+	RepoTags    []string    `json:",omitempty"`
+	RepoDigests []string    `json:",omitempty"`
+	ImageConfig *ConfigFile `json:",omitempty"`
+
+	// Repository metadata
+	RepoURL   string `json:",omitempty"`
+	Branch    string `json:",omitempty"`
+	Commit    string `json:",omitempty"`
+	CommitMsg string `json:",omitempty"`
+	Author    string `json:",omitempty"`
+	Committer string `json:",omitempty"`
 }
 
 type Results []Result
@@ -71,6 +82,7 @@ type Layer struct {
 type Package struct {
 	ID         string   `json:",omitempty"`
 	Name       string   `json:",omitempty"`
+	Identifier *PackageIdentifier `json:",omitempty"`
 	Version    string   `json:",omitempty"`
 	Release    string   `json:",omitempty"`
 	Epoch      int      `json:",omitempty"`
@@ -93,7 +105,7 @@ type Package struct {
 	// Note:　it may have interdependencies, which may lead to infinite loops.
 	DependsOn []string `json:",omitempty"`
 
-	Layer Layer `json:",omitempty"`
+	Layer *Layer `json:",omitempty"`
 
 	// Each package metadata have the file path, while the package from lock files does not have.
 	FilePath string `json:",omitempty"`
@@ -103,6 +115,14 @@ type Package struct {
 
 	// lines from the lock file where the dependency is written
 	Locations []Location `json:",omitempty"`
+
+	// Relationship with the project (root, direct, indirect)
+	Relationship string `json:",omitempty"`
+}
+
+type PackageIdentifier struct {
+	PURL string `json:",omitempty"`
+	UID  string `json:",omitempty"`
 }
 
 type Location struct {

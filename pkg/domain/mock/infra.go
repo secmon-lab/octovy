@@ -6,407 +6,12 @@ package mock
 import (
 	"cloud.google.com/go/bigquery"
 	"context"
-	"github.com/google/go-github/v53/github"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
-	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
+	"net/http"
 	"net/url"
 	"sync"
 )
-
-// Ensure, that GitHubMock does implement interfaces.GitHub.
-// If this is not the case, regenerate this file with moq.
-var _ interfaces.GitHub = &GitHubMock{}
-
-// GitHubMock is a mock implementation of interfaces.GitHub.
-//
-//	func TestSomethingThatUsesGitHub(t *testing.T) {
-//
-//		// make and configure a mocked interfaces.GitHub
-//		mockedGitHub := &GitHubMock{
-//			CreateCheckRunFunc: func(ctx context.Context, id types.GitHubAppInstallID, repo *model.GitHubRepo, commit string) (int64, error) {
-//				panic("mock out the CreateCheckRun method")
-//			},
-//			CreateIssueCommentFunc: func(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, prID int, body string) error {
-//				panic("mock out the CreateIssueComment method")
-//			},
-//			GetArchiveURLFunc: func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
-//				panic("mock out the GetArchiveURL method")
-//			},
-//			ListIssueCommentsFunc: func(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, prID int) ([]*model.GitHubIssueComment, error) {
-//				panic("mock out the ListIssueComments method")
-//			},
-//			MinimizeCommentFunc: func(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, subjectID string) error {
-//				panic("mock out the MinimizeComment method")
-//			},
-//			UpdateCheckRunFunc: func(ctx context.Context, id types.GitHubAppInstallID, repo *model.GitHubRepo, checkID int64, opt *github.UpdateCheckRunOptions) error {
-//				panic("mock out the UpdateCheckRun method")
-//			},
-//		}
-//
-//		// use mockedGitHub in code that requires interfaces.GitHub
-//		// and then make assertions.
-//
-//	}
-type GitHubMock struct {
-	// CreateCheckRunFunc mocks the CreateCheckRun method.
-	CreateCheckRunFunc func(ctx context.Context, id types.GitHubAppInstallID, repo *model.GitHubRepo, commit string) (int64, error)
-
-	// CreateIssueCommentFunc mocks the CreateIssueComment method.
-	CreateIssueCommentFunc func(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, prID int, body string) error
-
-	// GetArchiveURLFunc mocks the GetArchiveURL method.
-	GetArchiveURLFunc func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error)
-
-	// ListIssueCommentsFunc mocks the ListIssueComments method.
-	ListIssueCommentsFunc func(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, prID int) ([]*model.GitHubIssueComment, error)
-
-	// MinimizeCommentFunc mocks the MinimizeComment method.
-	MinimizeCommentFunc func(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, subjectID string) error
-
-	// UpdateCheckRunFunc mocks the UpdateCheckRun method.
-	UpdateCheckRunFunc func(ctx context.Context, id types.GitHubAppInstallID, repo *model.GitHubRepo, checkID int64, opt *github.UpdateCheckRunOptions) error
-
-	// calls tracks calls to the methods.
-	calls struct {
-		// CreateCheckRun holds details about calls to the CreateCheckRun method.
-		CreateCheckRun []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// ID is the id argument value.
-			ID types.GitHubAppInstallID
-			// Repo is the repo argument value.
-			Repo *model.GitHubRepo
-			// Commit is the commit argument value.
-			Commit string
-		}
-		// CreateIssueComment holds details about calls to the CreateIssueComment method.
-		CreateIssueComment []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Repo is the repo argument value.
-			Repo *model.GitHubRepo
-			// ID is the id argument value.
-			ID types.GitHubAppInstallID
-			// PrID is the prID argument value.
-			PrID int
-			// Body is the body argument value.
-			Body string
-		}
-		// GetArchiveURL holds details about calls to the GetArchiveURL method.
-		GetArchiveURL []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Input is the input argument value.
-			Input *interfaces.GetArchiveURLInput
-		}
-		// ListIssueComments holds details about calls to the ListIssueComments method.
-		ListIssueComments []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Repo is the repo argument value.
-			Repo *model.GitHubRepo
-			// ID is the id argument value.
-			ID types.GitHubAppInstallID
-			// PrID is the prID argument value.
-			PrID int
-		}
-		// MinimizeComment holds details about calls to the MinimizeComment method.
-		MinimizeComment []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Repo is the repo argument value.
-			Repo *model.GitHubRepo
-			// ID is the id argument value.
-			ID types.GitHubAppInstallID
-			// SubjectID is the subjectID argument value.
-			SubjectID string
-		}
-		// UpdateCheckRun holds details about calls to the UpdateCheckRun method.
-		UpdateCheckRun []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// ID is the id argument value.
-			ID types.GitHubAppInstallID
-			// Repo is the repo argument value.
-			Repo *model.GitHubRepo
-			// CheckID is the checkID argument value.
-			CheckID int64
-			// Opt is the opt argument value.
-			Opt *github.UpdateCheckRunOptions
-		}
-	}
-	lockCreateCheckRun     sync.RWMutex
-	lockCreateIssueComment sync.RWMutex
-	lockGetArchiveURL      sync.RWMutex
-	lockListIssueComments  sync.RWMutex
-	lockMinimizeComment    sync.RWMutex
-	lockUpdateCheckRun     sync.RWMutex
-}
-
-// CreateCheckRun calls CreateCheckRunFunc.
-func (mock *GitHubMock) CreateCheckRun(ctx context.Context, id types.GitHubAppInstallID, repo *model.GitHubRepo, commit string) (int64, error) {
-	if mock.CreateCheckRunFunc == nil {
-		panic("GitHubMock.CreateCheckRunFunc: method is nil but GitHub.CreateCheckRun was just called")
-	}
-	callInfo := struct {
-		Ctx    context.Context
-		ID     types.GitHubAppInstallID
-		Repo   *model.GitHubRepo
-		Commit string
-	}{
-		Ctx:    ctx,
-		ID:     id,
-		Repo:   repo,
-		Commit: commit,
-	}
-	mock.lockCreateCheckRun.Lock()
-	mock.calls.CreateCheckRun = append(mock.calls.CreateCheckRun, callInfo)
-	mock.lockCreateCheckRun.Unlock()
-	return mock.CreateCheckRunFunc(ctx, id, repo, commit)
-}
-
-// CreateCheckRunCalls gets all the calls that were made to CreateCheckRun.
-// Check the length with:
-//
-//	len(mockedGitHub.CreateCheckRunCalls())
-func (mock *GitHubMock) CreateCheckRunCalls() []struct {
-	Ctx    context.Context
-	ID     types.GitHubAppInstallID
-	Repo   *model.GitHubRepo
-	Commit string
-} {
-	var calls []struct {
-		Ctx    context.Context
-		ID     types.GitHubAppInstallID
-		Repo   *model.GitHubRepo
-		Commit string
-	}
-	mock.lockCreateCheckRun.RLock()
-	calls = mock.calls.CreateCheckRun
-	mock.lockCreateCheckRun.RUnlock()
-	return calls
-}
-
-// CreateIssueComment calls CreateIssueCommentFunc.
-func (mock *GitHubMock) CreateIssueComment(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, prID int, body string) error {
-	if mock.CreateIssueCommentFunc == nil {
-		panic("GitHubMock.CreateIssueCommentFunc: method is nil but GitHub.CreateIssueComment was just called")
-	}
-	callInfo := struct {
-		Ctx  context.Context
-		Repo *model.GitHubRepo
-		ID   types.GitHubAppInstallID
-		PrID int
-		Body string
-	}{
-		Ctx:  ctx,
-		Repo: repo,
-		ID:   id,
-		PrID: prID,
-		Body: body,
-	}
-	mock.lockCreateIssueComment.Lock()
-	mock.calls.CreateIssueComment = append(mock.calls.CreateIssueComment, callInfo)
-	mock.lockCreateIssueComment.Unlock()
-	return mock.CreateIssueCommentFunc(ctx, repo, id, prID, body)
-}
-
-// CreateIssueCommentCalls gets all the calls that were made to CreateIssueComment.
-// Check the length with:
-//
-//	len(mockedGitHub.CreateIssueCommentCalls())
-func (mock *GitHubMock) CreateIssueCommentCalls() []struct {
-	Ctx  context.Context
-	Repo *model.GitHubRepo
-	ID   types.GitHubAppInstallID
-	PrID int
-	Body string
-} {
-	var calls []struct {
-		Ctx  context.Context
-		Repo *model.GitHubRepo
-		ID   types.GitHubAppInstallID
-		PrID int
-		Body string
-	}
-	mock.lockCreateIssueComment.RLock()
-	calls = mock.calls.CreateIssueComment
-	mock.lockCreateIssueComment.RUnlock()
-	return calls
-}
-
-// GetArchiveURL calls GetArchiveURLFunc.
-func (mock *GitHubMock) GetArchiveURL(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
-	if mock.GetArchiveURLFunc == nil {
-		panic("GitHubMock.GetArchiveURLFunc: method is nil but GitHub.GetArchiveURL was just called")
-	}
-	callInfo := struct {
-		Ctx   context.Context
-		Input *interfaces.GetArchiveURLInput
-	}{
-		Ctx:   ctx,
-		Input: input,
-	}
-	mock.lockGetArchiveURL.Lock()
-	mock.calls.GetArchiveURL = append(mock.calls.GetArchiveURL, callInfo)
-	mock.lockGetArchiveURL.Unlock()
-	return mock.GetArchiveURLFunc(ctx, input)
-}
-
-// GetArchiveURLCalls gets all the calls that were made to GetArchiveURL.
-// Check the length with:
-//
-//	len(mockedGitHub.GetArchiveURLCalls())
-func (mock *GitHubMock) GetArchiveURLCalls() []struct {
-	Ctx   context.Context
-	Input *interfaces.GetArchiveURLInput
-} {
-	var calls []struct {
-		Ctx   context.Context
-		Input *interfaces.GetArchiveURLInput
-	}
-	mock.lockGetArchiveURL.RLock()
-	calls = mock.calls.GetArchiveURL
-	mock.lockGetArchiveURL.RUnlock()
-	return calls
-}
-
-// ListIssueComments calls ListIssueCommentsFunc.
-func (mock *GitHubMock) ListIssueComments(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, prID int) ([]*model.GitHubIssueComment, error) {
-	if mock.ListIssueCommentsFunc == nil {
-		panic("GitHubMock.ListIssueCommentsFunc: method is nil but GitHub.ListIssueComments was just called")
-	}
-	callInfo := struct {
-		Ctx  context.Context
-		Repo *model.GitHubRepo
-		ID   types.GitHubAppInstallID
-		PrID int
-	}{
-		Ctx:  ctx,
-		Repo: repo,
-		ID:   id,
-		PrID: prID,
-	}
-	mock.lockListIssueComments.Lock()
-	mock.calls.ListIssueComments = append(mock.calls.ListIssueComments, callInfo)
-	mock.lockListIssueComments.Unlock()
-	return mock.ListIssueCommentsFunc(ctx, repo, id, prID)
-}
-
-// ListIssueCommentsCalls gets all the calls that were made to ListIssueComments.
-// Check the length with:
-//
-//	len(mockedGitHub.ListIssueCommentsCalls())
-func (mock *GitHubMock) ListIssueCommentsCalls() []struct {
-	Ctx  context.Context
-	Repo *model.GitHubRepo
-	ID   types.GitHubAppInstallID
-	PrID int
-} {
-	var calls []struct {
-		Ctx  context.Context
-		Repo *model.GitHubRepo
-		ID   types.GitHubAppInstallID
-		PrID int
-	}
-	mock.lockListIssueComments.RLock()
-	calls = mock.calls.ListIssueComments
-	mock.lockListIssueComments.RUnlock()
-	return calls
-}
-
-// MinimizeComment calls MinimizeCommentFunc.
-func (mock *GitHubMock) MinimizeComment(ctx context.Context, repo *model.GitHubRepo, id types.GitHubAppInstallID, subjectID string) error {
-	if mock.MinimizeCommentFunc == nil {
-		panic("GitHubMock.MinimizeCommentFunc: method is nil but GitHub.MinimizeComment was just called")
-	}
-	callInfo := struct {
-		Ctx       context.Context
-		Repo      *model.GitHubRepo
-		ID        types.GitHubAppInstallID
-		SubjectID string
-	}{
-		Ctx:       ctx,
-		Repo:      repo,
-		ID:        id,
-		SubjectID: subjectID,
-	}
-	mock.lockMinimizeComment.Lock()
-	mock.calls.MinimizeComment = append(mock.calls.MinimizeComment, callInfo)
-	mock.lockMinimizeComment.Unlock()
-	return mock.MinimizeCommentFunc(ctx, repo, id, subjectID)
-}
-
-// MinimizeCommentCalls gets all the calls that were made to MinimizeComment.
-// Check the length with:
-//
-//	len(mockedGitHub.MinimizeCommentCalls())
-func (mock *GitHubMock) MinimizeCommentCalls() []struct {
-	Ctx       context.Context
-	Repo      *model.GitHubRepo
-	ID        types.GitHubAppInstallID
-	SubjectID string
-} {
-	var calls []struct {
-		Ctx       context.Context
-		Repo      *model.GitHubRepo
-		ID        types.GitHubAppInstallID
-		SubjectID string
-	}
-	mock.lockMinimizeComment.RLock()
-	calls = mock.calls.MinimizeComment
-	mock.lockMinimizeComment.RUnlock()
-	return calls
-}
-
-// UpdateCheckRun calls UpdateCheckRunFunc.
-func (mock *GitHubMock) UpdateCheckRun(ctx context.Context, id types.GitHubAppInstallID, repo *model.GitHubRepo, checkID int64, opt *github.UpdateCheckRunOptions) error {
-	if mock.UpdateCheckRunFunc == nil {
-		panic("GitHubMock.UpdateCheckRunFunc: method is nil but GitHub.UpdateCheckRun was just called")
-	}
-	callInfo := struct {
-		Ctx     context.Context
-		ID      types.GitHubAppInstallID
-		Repo    *model.GitHubRepo
-		CheckID int64
-		Opt     *github.UpdateCheckRunOptions
-	}{
-		Ctx:     ctx,
-		ID:      id,
-		Repo:    repo,
-		CheckID: checkID,
-		Opt:     opt,
-	}
-	mock.lockUpdateCheckRun.Lock()
-	mock.calls.UpdateCheckRun = append(mock.calls.UpdateCheckRun, callInfo)
-	mock.lockUpdateCheckRun.Unlock()
-	return mock.UpdateCheckRunFunc(ctx, id, repo, checkID, opt)
-}
-
-// UpdateCheckRunCalls gets all the calls that were made to UpdateCheckRun.
-// Check the length with:
-//
-//	len(mockedGitHub.UpdateCheckRunCalls())
-func (mock *GitHubMock) UpdateCheckRunCalls() []struct {
-	Ctx     context.Context
-	ID      types.GitHubAppInstallID
-	Repo    *model.GitHubRepo
-	CheckID int64
-	Opt     *github.UpdateCheckRunOptions
-} {
-	var calls []struct {
-		Ctx     context.Context
-		ID      types.GitHubAppInstallID
-		Repo    *model.GitHubRepo
-		CheckID int64
-		Opt     *github.UpdateCheckRunOptions
-	}
-	mock.lockUpdateCheckRun.RLock()
-	calls = mock.calls.UpdateCheckRun
-	mock.lockUpdateCheckRun.RUnlock()
-	return calls
-}
 
 // Ensure, that BigQueryMock does implement interfaces.BigQuery.
 // If this is not the case, regenerate this file with moq.
@@ -657,5 +262,121 @@ func (mock *BigQueryMock) UpdateTableCalls() []struct {
 	mock.lockUpdateTable.RLock()
 	calls = mock.calls.UpdateTable
 	mock.lockUpdateTable.RUnlock()
+	return calls
+}
+
+// Ensure, that GitHubAppMock does implement interfaces.GitHubApp.
+// If this is not the case, regenerate this file with moq.
+var _ interfaces.GitHubApp = &GitHubAppMock{}
+
+// GitHubAppMock is a mock implementation of interfaces.GitHubApp.
+//
+//	func TestSomethingThatUsesGitHubApp(t *testing.T) {
+//
+//		// make and configure a mocked interfaces.GitHubApp
+//		mockedGitHubApp := &GitHubAppMock{
+//			GetArchiveURLFunc: func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
+//				panic("mock out the GetArchiveURL method")
+//			},
+//			HTTPClientFunc: func(installID types.GitHubAppInstallID) (*http.Client, error) {
+//				panic("mock out the HTTPClient method")
+//			},
+//		}
+//
+//		// use mockedGitHubApp in code that requires interfaces.GitHubApp
+//		// and then make assertions.
+//
+//	}
+type GitHubAppMock struct {
+	// GetArchiveURLFunc mocks the GetArchiveURL method.
+	GetArchiveURLFunc func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error)
+
+	// HTTPClientFunc mocks the HTTPClient method.
+	HTTPClientFunc func(installID types.GitHubAppInstallID) (*http.Client, error)
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// GetArchiveURL holds details about calls to the GetArchiveURL method.
+		GetArchiveURL []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Input is the input argument value.
+			Input *interfaces.GetArchiveURLInput
+		}
+		// HTTPClient holds details about calls to the HTTPClient method.
+		HTTPClient []struct {
+			// InstallID is the installID argument value.
+			InstallID types.GitHubAppInstallID
+		}
+	}
+	lockGetArchiveURL sync.RWMutex
+	lockHTTPClient    sync.RWMutex
+}
+
+// GetArchiveURL calls GetArchiveURLFunc.
+func (mock *GitHubAppMock) GetArchiveURL(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
+	if mock.GetArchiveURLFunc == nil {
+		panic("GitHubAppMock.GetArchiveURLFunc: method is nil but GitHubApp.GetArchiveURL was just called")
+	}
+	callInfo := struct {
+		Ctx   context.Context
+		Input *interfaces.GetArchiveURLInput
+	}{
+		Ctx:   ctx,
+		Input: input,
+	}
+	mock.lockGetArchiveURL.Lock()
+	mock.calls.GetArchiveURL = append(mock.calls.GetArchiveURL, callInfo)
+	mock.lockGetArchiveURL.Unlock()
+	return mock.GetArchiveURLFunc(ctx, input)
+}
+
+// GetArchiveURLCalls gets all the calls that were made to GetArchiveURL.
+// Check the length with:
+//
+//	len(mockedGitHubApp.GetArchiveURLCalls())
+func (mock *GitHubAppMock) GetArchiveURLCalls() []struct {
+	Ctx   context.Context
+	Input *interfaces.GetArchiveURLInput
+} {
+	var calls []struct {
+		Ctx   context.Context
+		Input *interfaces.GetArchiveURLInput
+	}
+	mock.lockGetArchiveURL.RLock()
+	calls = mock.calls.GetArchiveURL
+	mock.lockGetArchiveURL.RUnlock()
+	return calls
+}
+
+// HTTPClient calls HTTPClientFunc.
+func (mock *GitHubAppMock) HTTPClient(installID types.GitHubAppInstallID) (*http.Client, error) {
+	if mock.HTTPClientFunc == nil {
+		panic("GitHubAppMock.HTTPClientFunc: method is nil but GitHubApp.HTTPClient was just called")
+	}
+	callInfo := struct {
+		InstallID types.GitHubAppInstallID
+	}{
+		InstallID: installID,
+	}
+	mock.lockHTTPClient.Lock()
+	mock.calls.HTTPClient = append(mock.calls.HTTPClient, callInfo)
+	mock.lockHTTPClient.Unlock()
+	return mock.HTTPClientFunc(installID)
+}
+
+// HTTPClientCalls gets all the calls that were made to HTTPClient.
+// Check the length with:
+//
+//	len(mockedGitHubApp.HTTPClientCalls())
+func (mock *GitHubAppMock) HTTPClientCalls() []struct {
+	InstallID types.GitHubAppInstallID
+} {
+	var calls []struct {
+		InstallID types.GitHubAppInstallID
+	}
+	mock.lockHTTPClient.RLock()
+	calls = mock.calls.HTTPClient
+	mock.lockHTTPClient.RUnlock()
 	return calls
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
-	"github.com/m-mizutani/octovy/pkg/utils"
+	"github.com/m-mizutani/octovy/pkg/utils/logging"
 )
 
 func handleGitHubAppEvent(uc interfaces.UseCase, r *http.Request, key types.GitHubAppSecret) error {
@@ -26,14 +26,14 @@ func handleGitHubAppEvent(uc interfaces.UseCase, r *http.Request, key types.GitH
 		return goerr.Wrap(err, "parsing webhook")
 	}
 
-	utils.CtxLogger(ctx).With(slog.Any("event", event)).Info("Received GitHub App event")
+	logging.From(ctx).With(slog.Any("event", event)).Info("Received GitHub App event")
 
 	scanInput := githubEventToScanInput(event)
 	if scanInput == nil {
 		return nil
 	}
 
-	utils.Logger().With(slog.Any("input", scanInput)).Info("Scan GitHub repository")
+	logging.Default().With(slog.Any("input", scanInput)).Info("Scan GitHub repository")
 
 	if err := uc.ScanGitHubRepo(r.Context(), scanInput); err != nil {
 		return goerr.Wrap(err, "failed to scan GitHub repository")
@@ -53,7 +53,7 @@ func githubEventToScanInput(event interface{}) *model.ScanGitHubRepoInput {
 	switch ev := event.(type) {
 	case *github.PushEvent:
 		if ev.HeadCommit == nil || ev.HeadCommit.ID == nil {
-			utils.Logger().Warn("ignore push event without head commit", slog.Any("event", ev))
+			logging.Default().Warn("ignore push event without head commit", slog.Any("event", ev))
 			return nil
 		}
 
@@ -80,11 +80,11 @@ func githubEventToScanInput(event interface{}) *model.ScanGitHubRepoInput {
 
 	case *github.PullRequestEvent:
 		if ev.GetAction() != "opened" && ev.GetAction() != "synchronize" {
-			utils.Logger().Debug("ignore PR event", slog.String("action", ev.GetAction()))
+			logging.Default().Debug("ignore PR event", slog.String("action", ev.GetAction()))
 			return nil
 		}
 		if ev.GetPullRequest().GetDraft() {
-			utils.Logger().Debug("ignore draft PR", slog.String("action", ev.GetAction()))
+			logging.Default().Debug("ignore draft PR", slog.String("action", ev.GetAction()))
 			return nil
 		}
 
@@ -129,11 +129,20 @@ func githubEventToScanInput(event interface{}) *model.ScanGitHubRepoInput {
 		return nil // ignore
 
 	default:
-		utils.Logger().Warn("unsupported event", slog.Any("event", fmt.Sprintf("%T", event)))
+		logging.Default().Warn("unsupported event", slog.Any("event", fmt.Sprintf("%T", event)))
 		return nil
 	}
 }
 
 func handleGitHubActionEvent(_ interfaces.UseCase, _ *http.Request) error {
 	return nil
+}
+
+// Test helpers - exported for testing
+func RefToBranchForTest(v string) string {
+	return refToBranch(v)
+}
+
+func GithubEventToScanInputForTest(event interface{}) *model.ScanGitHubRepoInput {
+	return githubEventToScanInput(event)
 }
