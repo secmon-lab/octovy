@@ -50,6 +50,7 @@ func TestInsertScanResult(t *testing.T) {
 				Branch:   "main",
 				CommitID: "0000000000000000000000000000000000000000",
 			},
+			InstallationID: 456,
 		}
 		report := trivy.Report{
 			SchemaVersion: 2,
@@ -130,6 +131,7 @@ func TestInsertScanResult(t *testing.T) {
 				Branch:   "main",
 				CommitID: "0000000000000000000000000000000000000000",
 			},
+			InstallationID: 456,
 		}
 		report := trivy.Report{
 			SchemaVersion: 2,
@@ -173,6 +175,7 @@ func TestInsertScanResult(t *testing.T) {
 				Branch:   "main",
 				CommitID: "0000000000000000000000000000000000000000",
 			},
+			InstallationID: 456,
 		}
 		report := trivy.Report{SchemaVersion: 2}
 
@@ -219,6 +222,7 @@ func TestInsertScanResult(t *testing.T) {
 				Branch:   "main",
 				CommitID: "abc1234567890123456789012345678901234567",
 			},
+			InstallationID: 456,
 		}
 		report := trivy.Report{
 			SchemaVersion: 2,
@@ -273,6 +277,7 @@ func TestInsertScanResult(t *testing.T) {
 				Branch:   "main",
 				CommitID: "0000000000000000000000000000000000000000",
 			},
+			InstallationID: 456,
 		}
 
 		repoID := types.GitHubRepoID("test-owner/test-repo")

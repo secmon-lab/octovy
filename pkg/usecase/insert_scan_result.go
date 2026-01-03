@@ -98,7 +98,7 @@ func (x *UseCase) insertToFirestore(ctx context.Context, meta model.GitHubMetada
 		Owner:          meta.Owner,
 		Name:           meta.RepoName,
 		DefaultBranch:  types.BranchName(meta.DefaultBranch),
-		InstallationID: 0,
+		InstallationID: meta.InstallationID,
 		CreatedAt:      scan.Timestamp,
 		UpdatedAt:      scan.Timestamp,
 	}

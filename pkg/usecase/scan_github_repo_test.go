@@ -139,6 +139,7 @@ func TestScanGitHubRepo(t *testing.T) {
 				CommitID: "f7c8851da7c7fcc46212fccfb6c9c4bda520f1ca",
 				Branch:   "main",
 			},
+			InstallationID: 12345,
 		},
 		InstallID: 12345,
 	}))
@@ -169,6 +170,7 @@ func TestScanGitHubRepoCleansTempAndPersistsMetadata(t *testing.T) {
 				CommitID: defaultTestCommitID,
 				Branch:   defaultTestBranch,
 			},
+			InstallationID: 12345,
 		},
 		InstallID: 12345,
 	}
@@ -207,6 +209,7 @@ func TestScanGitHubRepoRejectsPathTraversal(t *testing.T) {
 				CommitID: defaultTestCommitID,
 				Branch:   defaultTestBranch,
 			},
+			InstallationID: 12345,
 		},
 		InstallID: 12345,
 	}
@@ -239,6 +242,7 @@ func TestScanGitHubRepoTrivyError(t *testing.T) {
 				CommitID: defaultTestCommitID,
 				Branch:   defaultTestBranch,
 			},
+			InstallationID: 12345,
 		},
 		InstallID: 12345,
 	}
@@ -398,6 +402,7 @@ func TestScanGitHubRepoWithData(t *testing.T) {
 				},
 				CommitID: "6581604ef668e77a178e18dbc56e898f5fd87014",
 			},
+			InstallationID: 41633205,
 		},
 		InstallID: 41633205,
 	}))
@@ -418,6 +423,7 @@ func TestScanGitHubRepoValidation(t *testing.T) {
 					},
 					CommitID: "a234567890123456789012345678901234567890",
 				},
+				InstallationID: 0,
 			},
 			InstallID: 0, // Invalid
 		}
@@ -440,6 +446,7 @@ func TestScanGitHubRepoValidation(t *testing.T) {
 					},
 					CommitID: "", // Invalid
 				},
+				InstallationID: 12345,
 			},
 			InstallID: 12345,
 		}
