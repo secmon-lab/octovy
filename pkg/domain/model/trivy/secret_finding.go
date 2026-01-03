@@ -16,5 +16,6 @@ type SecretFinding struct {
 	EndLine   int
 	Code      Code
 	Match     string
-	Layer     Layer `json:",omitempty"`
+	Layer     *Layer `json:",omitempty"`
+	Offset    int   `json:",omitempty"`
 }

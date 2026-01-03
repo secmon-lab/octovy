@@ -6,21 +6,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/google/go-github/v53/github"
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/model/trivy"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"github.com/m-mizutani/octovy/pkg/infra"
-	"github.com/m-mizutani/octovy/pkg/utils"
+	"github.com/m-mizutani/octovy/pkg/utils/logging"
+	"github.com/m-mizutani/octovy/pkg/utils/safe"
 )
 
 // ScanGitHubRepo is a usecase to download a source code from GitHub and scan it with Trivy. Using GitHub App credentials to download a private repository, then the app should be installed to the repository and have read access.
@@ -30,55 +29,31 @@ func (x *UseCase) ScanGitHubRepo(ctx context.Context, input *model.ScanGitHubRep
 		return err
 	}
 
-	// Create and finalize GitHub check
-	conclusion := "cancelled"
-	checkID, err := x.clients.GitHubApp().CreateCheckRun(ctx, input.InstallID, &input.GitHubRepo, input.CommitID)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		opt := &github.UpdateCheckRunOptions{
-			Status:     github.String("completed"),
-			Conclusion: &conclusion,
-		}
-		if err := x.clients.GitHubApp().UpdateCheckRun(ctx, input.InstallID, &input.GitHubRepo, checkID, opt); err != nil {
-			utils.CtxLogger(ctx).Error("Failed to update check run", "err", err)
-		}
-	}()
-
 	// Extract zip file to local temp directory
 	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("octovy.%s.%s.%s.*", input.Owner, input.RepoName, input.CommitID))
 	if err != nil {
 		return goerr.Wrap(err, "failed to create temp directory for zip file")
 	}
-	defer utils.SafeRemoveAll(tmpDir)
+	defer safe.RemoveAll(tmpDir)
 
 	if err := x.downloadGitHubRepo(ctx, input, tmpDir); err != nil {
 		return err
 	}
 
-	cfg, err := model.LoadConfigsFromDir(filepath.Join(tmpDir, ".octovy"))
+	return x.ScanAndInsert(ctx, tmpDir, input.GitHubMetadata)
+}
+
+// ScanAndInsert scans a directory with Trivy and inserts the result to BigQuery
+func (x *UseCase) ScanAndInsert(ctx context.Context, dir string, meta model.GitHubMetadata) error {
+	report, err := x.scanDirectory(ctx, dir)
 	if err != nil {
 		return err
 	}
+	logging.From(ctx).Info("scan finished", "owner", meta.Owner, "repo", meta.RepoName, "commit", meta.CommitID)
 
-	report, err := x.scanGitHubRepo(ctx, tmpDir)
-	if err != nil {
+	if err := x.InsertScanResult(ctx, meta, *report); err != nil {
 		return err
 	}
-	utils.CtxLogger(ctx).Info("scan finished", "input", input, "report", report)
-
-	if err := x.InsertScanResult(ctx, input.GitHubMetadata, *report, *cfg); err != nil {
-		return err
-	}
-
-	if nil != x.clients.Storage() && nil != input.GitHubMetadata.PullRequest {
-		if err := x.CommentGitHubPR(ctx, input, report, cfg); err != nil {
-			return err
-		}
-	}
-
-	conclusion = "success"
 
 	return nil
 }
@@ -101,7 +76,7 @@ func (x *UseCase) downloadGitHubRepo(ctx context.Context, input *model.ScanGitHu
 	if err != nil {
 		return goerr.Wrap(err, "failed to create temp file for zip file")
 	}
-	defer utils.SafeRemove(tmpZip.Name())
+	defer safe.Remove(tmpZip.Name())
 
 	if err := downloadZipFile(ctx, x.clients.HTTPClient(), zipURL, tmpZip); err != nil {
 		return err
@@ -117,13 +92,14 @@ func (x *UseCase) downloadGitHubRepo(ctx context.Context, input *model.ScanGitHu
 	return nil
 }
 
-func (x *UseCase) scanGitHubRepo(ctx context.Context, codeDir string) (*trivy.Report, error) {
+// scanDirectory scans a directory with Trivy and returns the report
+func (x *UseCase) scanDirectory(ctx context.Context, codeDir string) (*trivy.Report, error) {
 	// Scan local directory
 	tmpResult, err := os.CreateTemp("", "octovy_result.*.json")
 	if err != nil {
 		return nil, goerr.Wrap(err, "failed to create temp file for scan result")
 	}
-	defer utils.SafeRemove(tmpResult.Name())
+	defer safe.Remove(tmpResult.Name())
 
 	if err := tmpResult.Close(); err != nil {
 		return nil, goerr.Wrap(err, "failed to close temp file for scan result")
@@ -146,7 +122,7 @@ func (x *UseCase) scanGitHubRepo(ctx context.Context, codeDir string) (*trivy.Re
 		return nil, err
 	}
 
-	utils.CtxLogger(ctx).Info("Scan result", slog.Any("report", tmpResult.Name()))
+	logging.From(ctx).Debug("Scan result saved", "result_file", tmpResult.Name())
 
 	return &report, nil
 }
@@ -156,13 +132,18 @@ func unmarshalFile(path string, v any) error {
 	if err != nil {
 		return goerr.Wrap(err, "failed to open file", goerr.V("path", path))
 	}
-	defer utils.SafeClose(fd)
+	defer safe.Close(fd)
 
 	if err := json.NewDecoder(fd).Decode(v); err != nil {
 		return goerr.Wrap(err, "failed to decode json", goerr.V("path", path))
 	}
 
 	return nil
+}
+
+// ScanDirectoryForTest is exported for testing purposes
+func (x *UseCase) ScanDirectoryForTest(ctx context.Context, codeDir string) (*trivy.Report, error) {
+	return x.scanDirectory(ctx, codeDir)
 }
 
 func downloadZipFile(ctx context.Context, httpClient infra.HTTPClient, zipURL *url.URL, w io.Writer) error {
@@ -201,7 +182,7 @@ func extractZipFile(ctx context.Context, src, dst string) error {
 	if err != nil {
 		return goerr.Wrap(err, "failed to open zip file", goerr.V("file", src))
 	}
-	defer utils.SafeClose(zipFile)
+	defer safe.Close(zipFile)
 
 	// Extract a source code zip file
 	for _, f := range zipFile.File {
@@ -218,7 +199,10 @@ func extractCode(_ context.Context, f *zip.File, dst string) error {
 		return nil
 	}
 
-	target := stepDownDirectory(f.Name)
+	target, err := stepDownDirectory(f.Name)
+	if err != nil {
+		return err
+	}
 	if target == "" {
 		return nil
 	}
@@ -237,13 +221,13 @@ func extractCode(_ context.Context, f *zip.File, dst string) error {
 	if err != nil {
 		return goerr.Wrap(err, "failed to open file", goerr.V("fpath", fpath))
 	}
-	defer utils.SafeClose(out)
+	defer safe.Close(out)
 
 	rc, err := f.Open()
 	if err != nil {
 		return goerr.Wrap(err, "failed to open zip entry")
 	}
-	defer utils.SafeClose(rc)
+	defer safe.Close(rc)
 
 	// #nosec
 	_, err = io.Copy(out, rc)
@@ -254,21 +238,37 @@ func extractCode(_ context.Context, f *zip.File, dst string) error {
 	return nil
 }
 
-func stepDownDirectory(fpath string) string {
-	if len(fpath) > 0 && fpath[0] == filepath.Separator {
-		fpath = fpath[1:]
+func stepDownDirectory(fpath string) (string, error) {
+	if fpath == "" {
+		return "", nil
 	}
 
-	p := fpath
-	var arr []string
-	for {
-		d, f := filepath.Split(p)
-		if d == "" {
-			break
+	normalized := strings.ReplaceAll(fpath, "\\", "/")
+	normalized = strings.TrimLeft(normalized, "/")
+	if normalized == "" {
+		return "", nil
+	}
+
+	parts := strings.Split(normalized, "/")
+	if len(parts) <= 1 {
+		return "", nil
+	}
+	parts = parts[1:]
+
+	var safeParts []string
+	for _, part := range parts {
+		if part == "" || part == "." {
+			continue
 		}
-		arr = append([]string{f}, arr...)
-		p = filepath.Clean(d)
+		if part == ".." {
+			return "", goerr.Wrap(types.ErrInvalidGitHubData, "illegal file path of zip", goerr.V("path", fpath))
+		}
+		safeParts = append(safeParts, part)
 	}
 
-	return filepath.Join(arr...)
+	if len(safeParts) == 0 {
+		return "", nil
+	}
+
+	return filepath.Join(safeParts...), nil
 }

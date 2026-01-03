@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -204,4 +205,70 @@ func newGitHubWebhookRequest(t *testing.T, event string, body []byte, secret typ
 	req.Header.Set("Content-Type", "application/json")
 
 	return req
+}
+
+func TestGitHubInvalidSignature(t *testing.T) {
+	const secret = "test-secret"
+
+	t.Run("invalid signature returns 500", func(t *testing.T) {
+		mockUC := &mock.UseCaseMock{
+			ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
+				return nil
+			},
+		}
+
+		srv := server.New(mockUC, server.WithGitHubSecret(secret))
+
+		body := []byte(`{"action":"push"}`)
+		req := gt.R1(http.NewRequest(http.MethodPost, "/webhook/github/app", bytes.NewReader(body))).NoError(t)
+
+		// Set wrong signature
+		req.Header.Set("X-GitHub-Event", "push")
+		req.Header.Set("X-Hub-Signature-256", "sha256=wrongsignature")
+		req.Header.Set("X-GitHub-Delivery", uuid.NewString())
+		req.Header.Set("Content-Type", "application/json")
+
+		rec := httptest.NewRecorder()
+		srv.Mux().ServeHTTP(rec, req)
+
+		gt.V(t, rec.Code).Equal(http.StatusInternalServerError)
+		gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(0)
+	})
+
+	t.Run("malformed payload returns 500", func(t *testing.T) {
+		mockUC := &mock.UseCaseMock{
+			ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
+				return nil
+			},
+		}
+
+		srv := server.New(mockUC, server.WithGitHubSecret(secret))
+
+		body := []byte(`{invalid json}`)
+		req := newGitHubWebhookRequest(t, "push", body, secret)
+
+		rec := httptest.NewRecorder()
+		srv.Mux().ServeHTTP(rec, req)
+
+		gt.V(t, rec.Code).Equal(http.StatusInternalServerError)
+		gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(0)
+	})
+
+	t.Run("UseCase error propagates to 500", func(t *testing.T) {
+		mockUC := &mock.UseCaseMock{
+			ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
+				return errors.New("intentional error")
+			},
+		}
+
+		srv := server.New(mockUC, server.WithGitHubSecret(secret))
+
+		req := newGitHubWebhookRequest(t, "push", testGitHubPush, secret)
+
+		rec := httptest.NewRecorder()
+		srv.Mux().ServeHTTP(rec, req)
+
+		gt.V(t, rec.Code).Equal(http.StatusInternalServerError)
+		gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(1)
+	})
 }

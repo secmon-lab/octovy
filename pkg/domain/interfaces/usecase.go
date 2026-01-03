@@ -1,5 +1,7 @@
 package interfaces
 
+//go:generate moq -out ../mock/usecase.go -pkg mock . UseCase
+
 import (
 	"context"
 
@@ -8,6 +10,6 @@ import (
 )
 
 type UseCase interface {
-	InsertScanResult(ctx context.Context, meta model.GitHubMetadata, report trivy.Report, cfg model.Config) error
+	InsertScanResult(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) error
 	ScanGitHubRepo(ctx context.Context, input *model.ScanGitHubRepoInput) error
 }

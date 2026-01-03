@@ -21,7 +21,7 @@ var _ interfaces.UseCase = &UseCaseMock{}
 //
 //		// make and configure a mocked interfaces.UseCase
 //		mockedUseCase := &UseCaseMock{
-//			InsertScanResultFunc: func(ctx context.Context, meta model.GitHubMetadata, report trivy.Report, cfg model.Config) error {
+//			InsertScanResultFunc: func(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) error {
 //				panic("mock out the InsertScanResult method")
 //			},
 //			ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
@@ -35,7 +35,7 @@ var _ interfaces.UseCase = &UseCaseMock{}
 //	}
 type UseCaseMock struct {
 	// InsertScanResultFunc mocks the InsertScanResult method.
-	InsertScanResultFunc func(ctx context.Context, meta model.GitHubMetadata, report trivy.Report, cfg model.Config) error
+	InsertScanResultFunc func(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) error
 
 	// ScanGitHubRepoFunc mocks the ScanGitHubRepo method.
 	ScanGitHubRepoFunc func(ctx context.Context, input *model.ScanGitHubRepoInput) error
@@ -50,8 +50,6 @@ type UseCaseMock struct {
 			Meta model.GitHubMetadata
 			// Report is the report argument value.
 			Report trivy.Report
-			// Cfg is the cfg argument value.
-			Cfg model.Config
 		}
 		// ScanGitHubRepo holds details about calls to the ScanGitHubRepo method.
 		ScanGitHubRepo []struct {
@@ -66,7 +64,7 @@ type UseCaseMock struct {
 }
 
 // InsertScanResult calls InsertScanResultFunc.
-func (mock *UseCaseMock) InsertScanResult(ctx context.Context, meta model.GitHubMetadata, report trivy.Report, cfg model.Config) error {
+func (mock *UseCaseMock) InsertScanResult(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) error {
 	if mock.InsertScanResultFunc == nil {
 		panic("UseCaseMock.InsertScanResultFunc: method is nil but UseCase.InsertScanResult was just called")
 	}
@@ -74,17 +72,15 @@ func (mock *UseCaseMock) InsertScanResult(ctx context.Context, meta model.GitHub
 		Ctx    context.Context
 		Meta   model.GitHubMetadata
 		Report trivy.Report
-		Cfg    model.Config
 	}{
 		Ctx:    ctx,
 		Meta:   meta,
 		Report: report,
-		Cfg:    cfg,
 	}
 	mock.lockInsertScanResult.Lock()
 	mock.calls.InsertScanResult = append(mock.calls.InsertScanResult, callInfo)
 	mock.lockInsertScanResult.Unlock()
-	return mock.InsertScanResultFunc(ctx, meta, report, cfg)
+	return mock.InsertScanResultFunc(ctx, meta, report)
 }
 
 // InsertScanResultCalls gets all the calls that were made to InsertScanResult.
@@ -95,13 +91,11 @@ func (mock *UseCaseMock) InsertScanResultCalls() []struct {
 	Ctx    context.Context
 	Meta   model.GitHubMetadata
 	Report trivy.Report
-	Cfg    model.Config
 } {
 	var calls []struct {
 		Ctx    context.Context
 		Meta   model.GitHubMetadata
 		Report trivy.Report
-		Cfg    model.Config
 	}
 	mock.lockInsertScanResult.RLock()
 	calls = mock.calls.InsertScanResult

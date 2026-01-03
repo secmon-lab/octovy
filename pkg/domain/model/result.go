@@ -12,7 +12,6 @@ type Scan struct {
 	Timestamp time.Time      `bigquery:"timestamp" firestore:"timestamp" json:"timestamp"`
 	GitHub    GitHubMetadata `bigquery:"github" firestore:"github" json:"github"`
 	Report    trivy.Report   `bigquery:"report" firestore:"report" json:"report"`
-	Config    string         `bigquery:"config" firestore:"config" json:"config"`
 }
 
 type ScanRawRecord struct {

@@ -1,8 +1,0 @@
-mutation ($id: ID!) {
-  minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) {
-    minimizedComment {
-      isMinimized
-      minimizedReason
-    }
-  }
-}

@@ -1,0 +1,12 @@
+version: '3'
+
+tasks:
+  gen:
+    desc: Generate mocks using moq
+    sources:
+      - pkg/domain/interfaces/*.go
+    generates:
+      - pkg/domain/mock/*.go
+    cmds:
+      - moq -out pkg/domain/mock/infra.go -pkg mock ./pkg/domain/interfaces BigQuery GitHubApp
+      - moq -out pkg/domain/mock/usecase.go -pkg mock ./pkg/domain/interfaces UseCase

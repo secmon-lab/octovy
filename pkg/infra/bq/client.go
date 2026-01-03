@@ -1,8 +1,11 @@
 package bq
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"strings"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/bigquery/storage/managedwriter"
@@ -10,7 +13,7 @@ import (
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
-	"github.com/m-mizutani/octovy/pkg/utils"
+	"github.com/m-mizutani/octovy/pkg/utils/safe"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -94,9 +97,13 @@ func (x *Client) Insert(ctx context.Context, table types.BQTableID, schema bigqu
 	if err != nil {
 		return goerr.Wrap(err, "failed to Marshal json message", goerr.V("v", data))
 	}
+	sanitizedRaw, err := sanitizeProtoJSON(raw)
+	if err != nil {
+		return goerr.Wrap(err, "failed to sanitize json message", goerr.V("raw", string(raw)))
+	}
 
 	// First, json->proto message
-	err = protojson.Unmarshal(raw, message)
+	err = protojson.Unmarshal(sanitizedRaw, message)
 	if err != nil {
 		return goerr.Wrap(err, "failed to Unmarshal json message", goerr.V("raw", string(raw)))
 	}
@@ -122,7 +129,7 @@ func (x *Client) Insert(ctx context.Context, table types.BQTableID, schema bigqu
 	if err != nil {
 		return goerr.Wrap(err, "failed to create managed stream")
 	}
-	defer utils.SafeClose(ms)
+	defer safe.Close(ms)
 
 	arResult, err := ms.AppendRows(ctx, rows)
 	if err != nil {
@@ -134,6 +141,50 @@ func (x *Client) Insert(ctx context.Context, table types.BQTableID, schema bigqu
 	}
 
 	return nil
+}
+
+func sanitizeProtoJSON(raw []byte) ([]byte, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var data any
+	if err := dec.Decode(&data); err != nil {
+		return nil, err
+	}
+	sanitized := sanitizeProtoJSONValue(data)
+
+	buf, err := json.Marshal(sanitized)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func sanitizeProtoJSONValue(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		res := make(map[string]any, len(val))
+		for key, value := range val {
+			newKey := protoFieldJSONName(key)
+			res[newKey] = sanitizeProtoJSONValue(value)
+		}
+		return res
+	case []any:
+		for i := range val {
+			val[i] = sanitizeProtoJSONValue(val[i])
+		}
+		return val
+	default:
+		return v
+	}
+}
+
+func protoFieldJSONName(name string) string {
+	if protoreflect.Name(name).IsValid() {
+		return name
+	}
+	encoded := base64.StdEncoding.EncodeToString([]byte(name))
+encoded = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(encoded, "+", "_"), "/", "_"), "=", "")
+	return "col_" + encoded
 }
 
 // UpdateTable implements interfaces.BigQuery.

@@ -3,16 +3,16 @@ package trivy
 import "time"
 
 type ConfigFile struct {
-	Architecture string `json:"architecture"`
+	Architecture string `json:"architecture,omitempty"`
 	Author       string `json:"author,omitempty"`
 	Container    string `json:"container,omitempty"`
 	// Created       Time    `json:"created,omitempty"`
 	Created       string    `json:"created,omitempty"`
 	DockerVersion string    `json:"docker_version,omitempty"`
 	History       []History `json:"history,omitempty"`
-	OS            string    `json:"os"`
-	RootFS        RootFS    `json:"rootfs"`
-	Config        Config    `json:"config"`
+	OS            string    `json:"os,omitempty"`
+	RootFS        *RootFS   `json:"rootfs,omitempty"`
+	Config        *Config   `json:"config,omitempty"`
 
 	// BigQuery does not support a field name with a dot, so we need to skip this field.
 	// OSVersion  string `json:"os.version,omitempty"`
@@ -39,8 +39,8 @@ type OS struct {
 }
 
 type RootFS struct {
-	Type    string `json:"type"`
-	DiffIDs []Hash `json:"diff_ids"`
+	Type    string `json:"type,omitempty"`
+	DiffIDs []Hash `json:"diff_ids,omitempty"`
 }
 
 type Hash struct {

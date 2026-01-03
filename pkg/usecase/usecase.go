@@ -8,8 +8,6 @@ import (
 type UseCase struct {
 	tableID types.BQTableID
 	clients *infra.Clients
-
-	disableNoDetectionComment bool
 }
 
 func New(clients *infra.Clients, options ...Option) *UseCase {
@@ -30,11 +28,5 @@ type Option func(*UseCase)
 func WithBigQueryTableID(tableID types.BQTableID) Option {
 	return func(x *UseCase) {
 		x.tableID = tableID
-	}
-}
-
-func WithDisableNoDetectionComment() Option {
-	return func(x *UseCase) {
-		x.disableNoDetectionComment = true
 	}
 }
