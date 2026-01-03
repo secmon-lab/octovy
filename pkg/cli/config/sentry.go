@@ -1,10 +1,12 @@
 package config
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/m-mizutani/goerr/v2"
+	"github.com/m-mizutani/octovy/pkg/utils/logging"
 	"github.com/urfave/cli/v3"
 )
 
@@ -32,8 +34,9 @@ func (x *Sentry) Flags() []cli.Flag {
 	}
 }
 
-func (x *Sentry) Configure() error {
+func (x *Sentry) Configure(ctx context.Context) error {
 	if x.dsn == "" {
+		logging.From(ctx).Warn("sentry is not configured")
 		return nil
 	}
 
@@ -49,7 +52,7 @@ func (x *Sentry) Configure() error {
 
 func (x *Sentry) LogValue() slog.Value {
 	return slog.GroupValue(
-		slog.Any("DSN.len", len(x.dsn)),
+		slog.Any("DSN", x.dsn),
 		slog.Any("Environment", x.environment),
 	)
 }

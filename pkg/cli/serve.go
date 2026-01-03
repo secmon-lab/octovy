@@ -68,7 +68,7 @@ func serveCommand() *cli.Command {
 				slog.Any("Sentry", sentry),
 			)
 
-			if err := sentry.Configure(); err != nil {
+			if err := sentry.Configure(ctx); err != nil {
 				return err
 			}
 
