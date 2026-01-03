@@ -4,7 +4,6 @@ go 1.24.3
 
 require (
 	cloud.google.com/go/bigquery v1.69.0
-	cuelang.org/go v0.13.2
 	github.com/bradleyfalzon/ghinstallation/v2 v2.16.0
 	github.com/fatih/color v1.18.0
 	github.com/getsentry/sentry-go v0.34.1
@@ -35,7 +34,6 @@ require (
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 // indirect
-	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.1 // indirect
@@ -56,7 +54,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
@@ -83,5 +80,4 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250715232539-7130f93afb79 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250715232539-7130f93afb79 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
