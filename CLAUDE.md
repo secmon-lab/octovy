@@ -8,42 +8,58 @@ Octovy is a GitHub App that scans repository code for vulnerable dependencies us
 
 ## Architecture
 
-The codebase follows clean architecture with clear separation of concerns:
+The codebase follows clean architecture with clear separation of concerns.
+
+### Key Dependencies
+- **CLI Framework**: urfave/cli/v3 for command-line interface
+- **HTTP Router**: go-chi/chi/v5 for HTTP routing
+- **Testing**: m-mizutani/gt for assertions, matryer/moq for mock generation
+- **Logging**: log/slog with m-mizutani/clog (colored output), m-mizutani/masq (secret masking)
+- **Error Handling**: m-mizutani/goerr/v2 with context values
+- **GitHub Integration**: bradleyfalzon/ghinstallation/v2 for GitHub App authentication
+- **BigQuery**: cloud.google.com/go/bigquery
+- **Trivy**: External CLI tool (aquasecurity/trivy) executed as subprocess
 
 ### Layer Structure
-- **CLI** ([pkg/cli/](pkg/cli/)): CLI commands using urfave/cli
+- **CLI** ([pkg/cli/](pkg/cli/)): CLI commands using urfave/cli/v3
   - `scan`: Scans local directory with Trivy and inserts results to BigQuery
-  - `serve`: Starts HTTP server for GitHub webhook handling
+  - `serve`: Starts HTTP server for GitHub webhook handling with graceful shutdown
+  - Configuration via [pkg/cli/config/](pkg/cli/config/): GitHubApp, BigQuery, Sentry configs with flag/env binding
 - **Controller** ([pkg/controller/](pkg/controller/)): HTTP server handling
-  - `server/`: HTTP server with chi router, handles GitHub webhook events at `/webhook/github/app` and `/webhook/github/action`
+  - `server/`: HTTP server with chi/v5 router, handles GitHub webhook events at `/webhook/github/app` and `/webhook/github/action`
+  - Health check endpoint at `/health`
+  - Graceful shutdown with configurable timeouts
 - **UseCase** ([pkg/usecase/](pkg/usecase/)): Business logic orchestration
-  - `ScanGitHubRepo`: Main workflow that downloads repo, scans with Trivy, and stores results
-  - `InsertScanResult`: Exports scan results to BigQuery
+  - `ScanGitHubRepo`: Downloads GitHub repo archive, extracts to temp dir, scans with Trivy, inserts to BigQuery
+  - `ScanAndInsert`: Scans local directory with Trivy and inserts results to BigQuery (used by both CLI and webhook)
+  - `InsertScanResult`: Exports scan results to BigQuery with metadata
 - **Domain** ([pkg/domain/](pkg/domain/)): Core business models and interfaces
-  - `interfaces/`: Defines contracts for infrastructure (GitHub, BigQuery, Trivy)
-  - `model/`: Business entities (GitHub metadata, Trivy reports, Config with CUE-based ignore lists)
-  - `types/`: Domain-specific types and constants
+  - `interfaces/`: Defines contracts for infrastructure (GitHub, BigQuery) and UseCase
+  - `model/`: Business entities (GitHub metadata, Trivy reports, Scan records for BigQuery)
+  - `types/`: Domain-specific types (GitHub App credentials with slog.LogValuer for safe logging)
+  - `mock/`: Generated mock implementations for testing
 - **Infra** ([pkg/infra/](pkg/infra/)): External service implementations
   - `ghapp/`: GitHub API client using bradleyfalzon/ghinstallation for GitHub App authentication
   - `bq/`: BigQuery client for storing scan results
   - `trivy/`: Wrapper for Trivy CLI execution
   - `clients.go`: Central dependency injection container
 - **Utils** ([pkg/utils/](pkg/utils/)): Shared utilities
-  - `logging/`: Structured logging with slog
-  - `safe/`: Safe I/O operations
-  - `testutil/`: Test helpers and utilities
+  - `logging/`: Structured logging with slog/clog, secret masking, context support
+  - `safe/`: Safe I/O operations (Close, Remove, RemoveAll)
+  - `errutil/`: Error handling utilities (HandleError for Sentry integration)
+  - `testutil/`: Test helpers for environment variable management
 
 ### Key Workflows
 1. **GitHub webhook received** → Server validates webhook → UseCase orchestrates scan
-2. **Scan workflow**: Download repo archive → Extract to temp dir → Run Trivy → Parse JSON results
-3. **Result storage**: Insert to BigQuery with auto-schema updates
-4. **Local scan workflow**: Run `scan` command → Auto-detect git metadata → Run Trivy on local directory → Insert results to BigQuery
+2. **GitHub repo scan workflow** (`ScanGitHubRepo`): Download repo archive via GitHub API → Extract to temp dir → Scan with Trivy → Insert to BigQuery → Cleanup temp files
+3. **Local scan workflow** (`ScanAndInsert`): Scan directory with Trivy → Parse JSON results → Insert to BigQuery
+4. **CLI scan command**: Auto-detect git metadata (owner/repo/commit from git commands) → Create clients → Call `ScanAndInsert` usecase
 
 ### Configuration System
-Uses CUE language for ignore lists. Users place `.cue` files in `.octovy/` directory at repo root. Schema at [pkg/domain/model/schema/ignore.cue](pkg/domain/model/schema/ignore.cue) defines `IgnoreList` with vulnerability IDs, expiration dates (max 90 days), and comments.
+Configuration is handled through CLI flags and environment variables. See [pkg/cli/config/](pkg/cli/config/) for configuration structures including GitHub App, BigQuery, and Sentry settings.
 
 ### Dependency Injection
-The `infra.Clients` struct aggregates all infrastructure dependencies. Tests use mocks generated via `moq` (see Taskfile.yaml). Interface definitions in [pkg/domain/interfaces/](pkg/domain/interfaces/) enable clean testing boundaries.
+The `infra.Clients` struct aggregates all infrastructure dependencies (GitHubApp, BigQuery, Trivy, HTTPClient). Created via `infra.New()` with functional options pattern (`WithGitHubApp`, `WithBigQuery`, `WithTrivy`, `WithHTTPClient`). Tests use mocks generated via `moq` in [pkg/domain/mock/](pkg/domain/mock/). Interface definitions in [pkg/domain/interfaces/](pkg/domain/interfaces/) enable clean testing boundaries.
 
 ## Development Commands
 
@@ -74,21 +90,26 @@ go generate ./...
 ```
 
 ### Building
+**NOTE**: Building is mentioned here for reference only. Per project policy, do NOT run `go build` commands during development.
+
 ```bash
-# Build binary
+# Build binary (for reference only - do not run)
 go build -o octovy .
-
-# Run local scan
-./octovy scan --dir /path/to/repo
-
-# Run server
-./octovy serve --addr :8080
 ```
 
 ### Running Commands
 ```bash
-# Scan local directory
-octovy scan --dir . --github-owner myorg --github-repo myrepo
+# Scan local directory (auto-detects GitHub metadata from git)
+octovy scan
+
+# Scan specific directory
+octovy scan --dir /path/to/repo
+
+# Scan with explicit GitHub metadata
+octovy scan --github-owner myorg --github-repo myrepo --github-commit-id abc123
+
+# Scan with BigQuery configuration
+octovy scan --bigquery-project-id my-project --bigquery-dataset-id my-dataset
 
 # Start webhook server
 octovy serve --addr :8080
@@ -105,6 +126,49 @@ docker run -p 8080:8080 -v /path/to/private-key.pem:/key.pem \
 ```
 
 ## Code Patterns
+
+### Struct Tags
+**CRITICAL**: Minimize the use of struct tags. Only add tags when there is an explicit serialization use case.
+
+Rules:
+- **DO NOT use `firestore` tags** - Firestore SDK handles field mapping automatically
+- **Only use `json` tags when explicitly converting to/from JSON** (e.g., API responses, external file formats)
+- **Domain models that are only used internally should have NO tags**
+- **BigQuery models can use `bigquery` tags for schema mapping**
+
+Examples:
+```go
+// CORRECT - Internal domain model (no tags needed)
+type Repository struct {
+    ID              types.GitHubRepoID
+    Owner           string
+    DefaultBranch   types.BranchName
+}
+
+// CORRECT - API response model (json tags for explicit JSON conversion)
+type APIResponse struct {
+    Status string `json:"status"`
+    Data   []Item `json:"data"`
+}
+
+// CORRECT - BigQuery model (bigquery tags for schema mapping)
+type ScanRecord struct {
+    ID        string `bigquery:"id"`
+    Timestamp int64  `bigquery:"timestamp"`
+}
+
+// INCORRECT - Unnecessary tags
+type Model struct {
+    ID   string `json:"id"`
+    Name string `json:"name"`
+}
+
+// INCORRECT - Firestore tags (prohibited)
+type Model struct {
+    ID   string `firestore:"id"`
+    Name string `firestore:"name"`
+}
+```
 
 ### Error Handling
 Uses `github.com/m-mizutani/goerr/v2` for wrapped errors with context. Patterns:
@@ -125,7 +189,7 @@ return goerr.Wrap(err, "failed to process",
 Note: goerr v2 requires message as second argument to `Wrap()`. Context values are added as variadic `goerr.V()` or `goerr.Value()` arguments, not via `.With()` method chains.
 
 ### Logging
-Structured logging via `logging.Default()` and `logging.FromContext(ctx)` from [pkg/utils/logging/](pkg/utils/logging/) (using log/slog). Supports both text and JSON formats via `OCTOVY_LOG_FORMAT` environment variable.
+Structured logging via `logging.Default()` and `logging.From(ctx)` from [pkg/utils/logging/](pkg/utils/logging/) (using log/slog with clog for colored text output). Supports both text and JSON formats. Configure with `logging.Configure(format, level, output)` function. Secrets are automatically masked using masq library.
 
 ### Testing
 - Uses `github.com/m-mizutani/gt` test framework for assertions
@@ -136,12 +200,57 @@ Structured logging via `logging.Default()` and `logging.FromContext(ctx)` from [
 **IMPORTANT - Test Coverage Requirements**:
 - **Every Go source file MUST have a corresponding test file**: If `xxx.go` exists, `xxx_test.go` MUST exist
   - **Exception**: Pure data model files (structs with no logic) do NOT require test files
-  - Model files are in `pkg/domain/model/` and contain only struct definitions with JSON tags
+  - Model files are in `pkg/domain/model/` and contain only struct definitions with `json`/`bigquery` tags
   - If a file contains any methods or functions with logic, it MUST have tests
 - **Unit tests are mandatory**: Each function and method requires unit tests covering normal cases, edge cases, and error scenarios
 - **Integration tests are required**: End-to-end workflows must have integration tests validating the complete flow
 - **Test-Driven Development**: When adding new features or fixing bugs, write tests first before implementation
 - Do not merge code without proper test coverage
+- **Mock generation**: Use `task gen` or `go generate ./...` to regenerate mocks after interface changes
+
+**Firestore Testing Pattern**:
+When implementing repository layers with both Memory and Firestore implementations:
+
+1. **Common Test Helper Approach**: Memory and Firestore implementations MUST use the same test cases
+   - Create test helper functions in `pkg/repository/testhelper/` that accept the interface
+   - Both implementations call the same test helper functions
+   - This ensures identical behavior between Memory and Firestore implementations
+
+2. **Environment-Based Firestore Testing**:
+   - Firestore tests connect to real Firestore ONLY when `TEST_FIRESTORE_PROJECT_ID` and `TEST_FIRESTORE_DATABASE_ID` are set
+   - If these environment variables are not set, skip Firestore tests with `t.Skip()`
+   - This allows local development without Firestore while ensuring CI tests against real Firestore
+
+Example pattern:
+```go
+// pkg/repository/testhelper/scan_repository_test.go
+func TestRepositoryCRUD(t *testing.T, repo interfaces.ScanRepository) {
+    // Common test logic for both Memory and Firestore
+}
+
+// pkg/repository/memory/scan_test.go
+func TestMemoryScanRepository(t *testing.T) {
+    repo := New()
+    testhelper.TestRepositoryCRUD(t, repo)
+}
+
+// pkg/repository/firestore/scan_test.go
+func TestFirestoreScanRepository(t *testing.T) {
+    projectID := os.Getenv("TEST_FIRESTORE_PROJECT_ID")
+    databaseID := os.Getenv("TEST_FIRESTORE_DATABASE_ID")
+
+    if projectID == "" || databaseID == "" {
+        t.Skip("Firestore credentials not configured")
+    }
+
+    repo, err := New(context.Background(), projectID, databaseID)
+    gt.NoError(t, err)
+    defer repo.Close()
+
+    // Same tests as Memory implementation
+    testhelper.TestRepositoryCRUD(t, repo)
+}
+```
 
 **CRITICAL - Test Quality Standards**:
 - **PROHIBITED test patterns** - These are NOT acceptable tests:
@@ -179,10 +288,19 @@ Structured logging via `logging.Default()` and `logging.FromContext(ctx)` from [
 
 ## Important Implementation Details
 
-- **Trivy integration**: Executes trivy CLI as subprocess with JSON output. Default path is `trivy`, configurable via `OCTOVY_TRIVY_PATH`.
-- **GitHub App authentication**: Uses installation tokens via `ghinstallation` library. Private key can be file path or PEM content.
-- **Temporary file handling**: Repos downloaded to temp dirs with `octovy.<owner>.<repo>.<commit>.*` pattern. Always cleaned up with deferred `safe.RemoveAll()` from [pkg/utils/safe/](pkg/utils/safe/).
-- **Auto-detection**: The `scan` command automatically detects GitHub metadata (owner, repo, commit ID) from git commands if not explicitly provided.
+- **Trivy integration**: Executes trivy CLI as subprocess (`pkg/infra/trivy/`) with JSON output. Default path is `trivy`, configurable via `OCTOVY_TRIVY_PATH`. Runs with flags: `fs --exit-code 0 --no-progress --format json --output <file> --list-all-pkgs <dir>`.
+- **GitHub App authentication**: Uses installation tokens via `ghinstallation` library (`pkg/infra/ghapp/`). Private key can be file path or PEM content.
+- **Temporary file handling**:
+  - Repo archives downloaded to temp files: `octovy_code.<owner>.<repo>.<commit>.*.zip`
+  - Extracted to temp dirs: `octovy.<owner>.<repo>.<commit>.*`
+  - Scan results saved to: `octovy_result.*.json`
+  - Always cleaned up with deferred `safe.Remove()` and `safe.RemoveAll()` from [pkg/utils/safe/](pkg/utils/safe/)
+- **Auto-detection**: The `scan` command automatically detects GitHub metadata from git commands:
+  - Commit ID: `git rev-parse HEAD`
+  - Owner/Repo: Parsed from `git remote get-url origin` (supports both SSH and HTTPS formats)
+- **BigQuery schema**: See `model.Scan` struct in [pkg/domain/model/result.go](pkg/domain/model/result.go). Uses `bigquery` and `json` tags for schema mapping.
+- **Error handling**: All errors use `goerr.Wrap()` with context values. Sentry integration available via `errutil.HandleError()`.
+- **Secret masking**: GitHub App credentials (Secret, PrivateKey) implement `slog.LogValuer` interface in [pkg/domain/types/github.go](pkg/domain/types/github.go) to prevent logging sensitive data.
 
 ## Environment Variables
 
