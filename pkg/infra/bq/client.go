@@ -183,7 +183,7 @@ func protoFieldJSONName(name string) string {
 		return name
 	}
 	encoded := base64.StdEncoding.EncodeToString([]byte(name))
-	encoded = strings.Trim(encoded, "+/=")
+encoded = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(encoded, "+", "_"), "/", "_"), "=", "")
 	return "col_" + encoded
 }
 
