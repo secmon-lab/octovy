@@ -13,11 +13,11 @@ import (
 )
 
 type BigQuery interface {
-	Insert(ctx context.Context, tableID types.BQTableID, schema bigquery.Schema, data any) error
+	Insert(ctx context.Context, schema bigquery.Schema, data any) error
 
-	GetMetadata(ctx context.Context, table types.BQTableID) (*bigquery.TableMetadata, error)
-	UpdateTable(ctx context.Context, table types.BQTableID, md bigquery.TableMetadataToUpdate, eTag string) error
-	CreateTable(ctx context.Context, table types.BQTableID, md *bigquery.TableMetadata) error
+	GetMetadata(ctx context.Context) (*bigquery.TableMetadata, error)
+	UpdateTable(ctx context.Context, md bigquery.TableMetadataToUpdate, eTag string) error
+	CreateTable(ctx context.Context, md *bigquery.TableMetadata) error
 }
 
 type GitHubApp interface {

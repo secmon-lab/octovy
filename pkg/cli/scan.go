@@ -8,6 +8,7 @@ import (
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gots/slice"
 	"github.com/m-mizutani/octovy/pkg/cli/config"
+	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/infra"
 	trivyInfra "github.com/m-mizutani/octovy/pkg/infra/trivy"
@@ -18,6 +19,7 @@ import (
 func scanCommand() *cli.Command {
 	var (
 		bigQuery  config.BigQuery
+		firestore config.Firestore
 		dir       string
 		trivyPath string
 		meta      model.GitHubMetadata
@@ -60,7 +62,7 @@ func scanCommand() *cli.Command {
 				Sources:     cli.EnvVars("OCTOVY_GITHUB_COMMIT_ID"),
 				Destination: &meta.CommitID,
 			},
-		}, bigQuery.Flags()),
+		}, bigQuery.Flags(), firestore.Flags()),
 		Action: func(ctx context.Context, c *cli.Command) error {
 
 			// Auto-detect GitHub metadata from git if not specified
@@ -68,7 +70,7 @@ func scanCommand() *cli.Command {
 				return err
 			}
 
-			return runScan(ctx, dir, trivyPath, meta, &bigQuery)
+			return runScan(ctx, dir, trivyPath, meta, &bigQuery, &firestore)
 		},
 	}
 }
@@ -132,21 +134,35 @@ func autoDetectGitMetadata(ctx context.Context, meta *model.GitHubMetadata) erro
 	return nil
 }
 
-func runScan(ctx context.Context, dir, trivyPath string, meta model.GitHubMetadata, bigQuery *config.BigQuery) error {
+func runScan(ctx context.Context, dir, trivyPath string, meta model.GitHubMetadata, bigQuery *config.BigQuery, firestoreConfig *config.Firestore) error {
 	// Create BigQuery client if configured
 	bqClient, err := bigQuery.NewClient(ctx)
 	if err != nil {
 		return goerr.Wrap(err, "failed to create BigQuery client")
 	}
 
+	// Create Firestore repository if configured
+	var firestoreRepo interfaces.ScanRepository
+	if firestoreConfig.Enabled() {
+		repo, err := firestoreConfig.NewRepository(ctx)
+		if err != nil {
+			return goerr.Wrap(err, "failed to create Firestore repository")
+		}
+		firestoreRepo = repo
+	}
+
 	// Create clients and usecase
 	trivyClient := trivyInfra.New(trivyPath)
-	clients := infra.New(
+	clientOpts := []infra.Option{
 		infra.WithTrivy(trivyClient),
 		infra.WithBigQuery(bqClient),
-	)
+	}
+	if firestoreRepo != nil {
+		clientOpts = append(clientOpts, infra.WithScanRepository(firestoreRepo))
+	}
+	clients := infra.New(clientOpts...)
 
-	uc := usecase.New(clients, usecase.WithBigQueryTableID(bigQuery.TableID()))
+	uc := usecase.New(clients)
 
 	// Scan directory and insert to BigQuery
 	if err := uc.ScanAndInsert(ctx, dir, meta); err != nil {

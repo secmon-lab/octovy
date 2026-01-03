@@ -8,10 +8,11 @@ import (
 )
 
 type Clients struct {
-	githubApp   interfaces.GitHubApp
-	httpClient  HTTPClient
-	trivyClient trivy.Client
-	bqClient    interfaces.BigQuery
+	githubApp      interfaces.GitHubApp
+	httpClient     HTTPClient
+	trivyClient    trivy.Client
+	bqClient       interfaces.BigQuery
+	scanRepository interfaces.ScanRepository
 }
 
 type HTTPClient interface {
@@ -45,6 +46,9 @@ func (x *Clients) Trivy() trivy.Client {
 func (x *Clients) BigQuery() interfaces.BigQuery {
 	return x.bqClient
 }
+func (x *Clients) ScanRepository() interfaces.ScanRepository {
+	return x.scanRepository
+}
 
 func WithGitHubApp(client interfaces.GitHubApp) Option {
 	return func(x *Clients) {
@@ -67,5 +71,11 @@ func WithTrivy(client trivy.Client) Option {
 func WithBigQuery(client interfaces.BigQuery) Option {
 	return func(x *Clients) {
 		x.bqClient = client
+	}
+}
+
+func WithScanRepository(repo interfaces.ScanRepository) Option {
+	return func(x *Clients) {
+		x.scanRepository = repo
 	}
 }

@@ -17,7 +17,8 @@ The codebase follows clean architecture with clear separation of concerns.
 - **Logging**: log/slog with m-mizutani/clog (colored output), m-mizutani/masq (secret masking)
 - **Error Handling**: m-mizutani/goerr/v2 with context values
 - **GitHub Integration**: bradleyfalzon/ghinstallation/v2 for GitHub App authentication
-- **BigQuery**: cloud.google.com/go/bigquery
+- **BigQuery**: cloud.google.com/go/bigquery for scan result storage
+- **Firestore**: cloud.google.com/go/firestore for repository metadata and vulnerability tracking (optional)
 - **Trivy**: External CLI tool (aquasecurity/trivy) executed as subprocess
 
 ### Layer Structure
@@ -43,6 +44,13 @@ The codebase follows clean architecture with clear separation of concerns.
   - `bq/`: BigQuery client for storing scan results
   - `trivy/`: Wrapper for Trivy CLI execution
   - `clients.go`: Central dependency injection container
+- **Repository** ([pkg/repository/](pkg/repository/)): Data persistence layer
+  - `memory/`: In-memory implementation for testing and development
+  - `firestore/`: Firestore implementation for production use (optional)
+  - `testhelper/`: Shared test functions ensuring identical behavior across implementations
+  - Manages scan results, repository metadata, branch information, targets, and vulnerabilities
+  - Firestore collection structure: `repo/{owner:repo}/branch/{name}/target/{id}/vulnerability/{id}`
+  - Document ID format: Uses `:` separator (e.g., `owner:repo`) since GitHub names cannot contain colons
 - **Utils** ([pkg/utils/](pkg/utils/)): Shared utilities
   - `logging/`: Structured logging with slog/clog, secret masking, context support
   - `safe/`: Safe I/O operations (Close, Remove, RemoveAll)
@@ -56,7 +64,7 @@ The codebase follows clean architecture with clear separation of concerns.
 4. **CLI scan command**: Auto-detect git metadata (owner/repo/commit from git commands) → Create clients → Call `ScanAndInsert` usecase
 
 ### Configuration System
-Configuration is handled through CLI flags and environment variables. See [pkg/cli/config/](pkg/cli/config/) for configuration structures including GitHub App, BigQuery, and Sentry settings.
+Configuration is handled through CLI flags and environment variables. See [pkg/cli/config/](pkg/cli/config/) for configuration structures including GitHub App, BigQuery, Firestore, and Sentry settings. Firestore is completely optional - the application works normally with BigQuery-only storage when Firestore is not configured.
 
 ### Dependency Injection
 The `infra.Clients` struct aggregates all infrastructure dependencies (GitHubApp, BigQuery, Trivy, HTTPClient). Created via `infra.New()` with functional options pattern (`WithGitHubApp`, `WithBigQuery`, `WithTrivy`, `WithHTTPClient`). Tests use mocks generated via `moq` in [pkg/domain/mock/](pkg/domain/mock/). Interface definitions in [pkg/domain/interfaces/](pkg/domain/interfaces/) enable clean testing boundaries.
@@ -127,6 +135,43 @@ docker run -p 8080:8080 -v /path/to/private-key.pem:/key.pem \
 
 ## Code Patterns
 
+### CRITICAL - No TODO or Future Comments
+**NEVER leave TODO, FIXME, XXX, HACK, or "in future" comments in code unless explicitly instructed by the user.**
+
+Rules:
+- **Implement features completely** - Do not add placeholder comments for future work
+- **If a feature cannot be implemented now**, ask the user for clarification instead of leaving a TODO
+- **No "Note: will be used in future"** comments - Either implement it now or don't add it at all
+- **No deferring implementation** with comments like "this will be added later"
+- **Complete all integration work** - Don't create infrastructure that isn't used immediately
+
+Examples of PROHIBITED patterns:
+```go
+// BAD - TODO comment without user instruction
+// TODO: Add validation here
+
+// BAD - Future placeholder
+// Note: This will be used in future when X supports Y
+
+// BAD - Deferred implementation
+// This feature will be implemented later
+
+// BAD - Unused variable with future comment
+firestoreRepo := createRepo()
+// Note: Firestore repository is created but not yet integrated
+_ = firestoreRepo
+```
+
+GOOD pattern - Complete implementation:
+```go
+// GOOD - Feature is fully implemented
+if firestoreConfig.Enabled() {
+    repo := createRepo()
+    defer repo.Close()
+    clients = append(clients, infra.WithScanRepository(repo))
+}
+```
+
 ### Struct Tags
 **CRITICAL**: Minimize the use of struct tags. Only add tags when there is an explicit serialization use case.
 
@@ -191,6 +236,27 @@ Note: goerr v2 requires message as second argument to `Wrap()`. Context values a
 ### Logging
 Structured logging via `logging.Default()` and `logging.From(ctx)` from [pkg/utils/logging/](pkg/utils/logging/) (using log/slog with clog for colored text output). Supports both text and JSON formats. Configure with `logging.Configure(format, level, output)` function. Secrets are automatically masked using masq library.
 
+### Testing - Mock Usage Policy
+**CRITICAL**: Do NOT create and use mock repositories (e.g. `mock.ScanRepositoryMock`) in tests. Use actual implementations instead.
+
+Rules:
+- **ALWAYS use `memory.New()`** for repository testing instead of mocks
+- **Mock only external services** that cannot be run locally (BigQuery, external APIs)
+- **Memory implementation provides real behavior** - use it to verify actual data persistence and retrieval
+- Mocks hide bugs and don't test real integration - avoid them for internal components
+
+Example:
+```go
+// BAD - Using mock repository
+mockRepo := &mock.ScanRepositoryMock{}
+mockRepo.ListVulnerabilitiesFunc = func(...) {...}
+
+// GOOD - Using memory repository
+memRepo := memory.New()
+// Test against actual implementation
+vulns, err := memRepo.ListVulnerabilities(ctx, repoID, branchName, targetID)
+```
+
 ### Testing
 - Uses `github.com/m-mizutani/gt` test framework for assertions
 - Common patterns: `gt.V(t, actual).Equal(expected)`, `gt.NoError(t, err)`, `gt.R1(fn()).NoError(t)`
@@ -220,6 +286,32 @@ When implementing repository layers with both Memory and Firestore implementatio
    - Firestore tests connect to real Firestore ONLY when `TEST_FIRESTORE_PROJECT_ID` and `TEST_FIRESTORE_DATABASE_ID` are set
    - If these environment variables are not set, skip Firestore tests with `t.Skip()`
    - This allows local development without Firestore while ensuring CI tests against real Firestore
+
+3. **CRITICAL - Test ID Randomization**:
+   - **ALWAYS randomize test IDs using UUID** to ensure test isolation and prevent conflicts
+   - Generate unique IDs at the start of each test function using `uuid.New()`
+   - Use short UUIDs (first 8 characters) for readability: `uuid.New().String()[:8]`
+   - Apply to ALL entity IDs: repository IDs, branch names, target IDs, etc.
+   - This prevents test failures when tests run in parallel or when data persists between runs
+   - Example:
+     ```go
+     import "github.com/google/uuid"
+
+     func TestRepositoryCRUD(t *testing.T, repo interfaces.ScanRepository) {
+         // Generate unique IDs for this test run
+         owner := fmt.Sprintf("owner-%s", uuid.New().String()[:8])
+         repoName := fmt.Sprintf("repo-%s", uuid.New().String()[:8])
+         repoID := types.GitHubRepoID(fmt.Sprintf("%s/%s", owner, repoName))
+
+         // Use these randomized IDs throughout the test
+         testRepo := &model.Repository{
+             ID:    repoID,
+             Owner: owner,
+             Name:  repoName,
+             // ...
+         }
+     }
+     ```
 
 Example pattern:
 ```go
@@ -316,6 +408,12 @@ Optional configuration:
 - `OCTOVY_BIGQUERY_DATASET_ID`: BigQuery dataset ID (default: `octovy`)
 - `OCTOVY_BIGQUERY_TABLE_ID`: BigQuery table ID (default: `scans`)
 - `OCTOVY_BIGQUERY_IMPERSONATE_SERVICE_ACCOUNT`: Service account to impersonate for BigQuery access
+- `OCTOVY_FIRESTORE_PROJECT_ID`: Firestore project ID for repository metadata (optional)
+- `OCTOVY_FIRESTORE_DATABASE_ID`: Firestore database ID (optional, default: `(default)`)
 - `OCTOVY_LOG_FORMAT`: Log format (`text` or `json`, default: `text`)
 - `OCTOVY_SENTRY_DSN`: Sentry DSN for error tracking
 - `OCTOVY_SENTRY_ENV`: Sentry environment name
+
+Testing configuration:
+- `TEST_FIRESTORE_PROJECT_ID`: Firestore project ID for integration tests
+- `TEST_FIRESTORE_DATABASE_ID`: Firestore database ID for integration tests

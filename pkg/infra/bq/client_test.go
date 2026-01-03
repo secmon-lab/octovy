@@ -26,7 +26,7 @@ func TestClient(t *testing.T) {
 	ctx := context.Background()
 
 	tblName := types.BQTableID(time.Now().Format("insert_test_20060102_150405"))
-	client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID))
+	client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID), tblName)
 	gt.NoError(t, err)
 
 	var baseSchema bigquery.Schema
@@ -36,7 +36,7 @@ func TestClient(t *testing.T) {
 		baseSchema = gt.R1(bqs.Infer(scan)).NoError(t)
 		gt.NoError(t, err)
 
-		gt.NoError(t, client.CreateTable(ctx, tblName, &bigquery.TableMetadata{
+		gt.NoError(t, client.CreateTable(ctx, &bigquery.TableMetadata{
 			Name:   tblName.String(),
 			Schema: baseSchema,
 		}))
@@ -50,9 +50,9 @@ func TestClient(t *testing.T) {
 		dataSchema := gt.R1(bqs.Infer(scan)).NoError(t)
 		mergedSchema := gt.R1(bqs.Merge(baseSchema, dataSchema)).NoError(t)
 
-		md := gt.R1(client.GetMetadata(ctx, tblName)).NoError(t)
+		md := gt.R1(client.GetMetadata(ctx)).NoError(t)
 		gt.False(t, bqs.Equal(mergedSchema, baseSchema))
-		gt.NoError(t, client.UpdateTable(ctx, tblName, bigquery.TableMetadataToUpdate{
+		gt.NoError(t, client.UpdateTable(ctx, bigquery.TableMetadataToUpdate{
 			Schema: mergedSchema,
 		}, md.ETag))
 
@@ -60,7 +60,7 @@ func TestClient(t *testing.T) {
 			Scan:      scan,
 			Timestamp: scan.Timestamp.UnixMicro(),
 		}
-		gt.NoError(t, client.Insert(ctx, tblName, mergedSchema, record))
+		gt.NoError(t, client.Insert(ctx, mergedSchema, record))
 	})
 }
 
@@ -80,7 +80,8 @@ func TestImpersonation(t *testing.T) {
 	})
 	gt.NoError(t, err)
 
-	client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID), option.WithTokenSource(ts))
+	tblName := types.BQTableID(time.Now().Format("impersonation_test_20060102_150405"))
+	client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID), tblName, option.WithTokenSource(ts))
 	gt.NoError(t, err)
 
 	msg := struct {
@@ -91,13 +92,12 @@ func TestImpersonation(t *testing.T) {
 
 	schema := gt.R1(bqs.Infer(msg)).NoError(t)
 
-	tblName := types.BQTableID(time.Now().Format("impersonation_test_20060102_150405"))
-	gt.NoError(t, client.CreateTable(ctx, tblName, &bigquery.TableMetadata{
+	gt.NoError(t, client.CreateTable(ctx, &bigquery.TableMetadata{
 		Name:   tblName.String(),
 		Schema: schema,
 	}))
 
-	gt.NoError(t, client.Insert(ctx, tblName, schema, msg))
+	gt.NoError(t, client.Insert(ctx, schema, msg))
 }
 
 func TestClientErrors(t *testing.T) {
@@ -106,11 +106,11 @@ func TestClientErrors(t *testing.T) {
 		datasetID := testutil.GetEnvOrSkip(t, "TEST_BIGQUERY_DATASET_ID")
 
 		ctx := context.Background()
-		client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID))
+		nonExistentTable := types.BQTableID("non_existent_table_999999")
+		client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID), nonExistentTable)
 		gt.NoError(t, err)
 
-		nonExistentTable := types.BQTableID("non_existent_table_999999")
-		md, err := client.GetMetadata(ctx, nonExistentTable)
+		md, err := client.GetMetadata(ctx)
 		gt.NoError(t, err)
 		gt.V(t, md).Equal(nil)
 	})
@@ -120,16 +120,15 @@ func TestClientErrors(t *testing.T) {
 		datasetID := testutil.GetEnvOrSkip(t, "TEST_BIGQUERY_DATASET_ID")
 
 		ctx := context.Background()
-		client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID))
-		gt.NoError(t, err)
-
 		tblName := types.BQTableID(time.Now().Format("mismatch_test_20060102_150405"))
+		client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID), tblName)
+		gt.NoError(t, err)
 
 		// Create table with specific schema
 		schema := bigquery.Schema{
 			{Name: "field1", Type: bigquery.StringFieldType},
 		}
-		gt.NoError(t, client.CreateTable(ctx, tblName, &bigquery.TableMetadata{
+		gt.NoError(t, client.CreateTable(ctx, &bigquery.TableMetadata{
 			Name:   tblName.String(),
 			Schema: schema,
 		}))
@@ -141,7 +140,7 @@ func TestClientErrors(t *testing.T) {
 			WrongField: 123,
 		}
 
-		err = client.Insert(ctx, tblName, schema, wrongData)
+		err = client.Insert(ctx, schema, wrongData)
 		gt.Error(t, err)
 	})
 }
@@ -152,7 +151,8 @@ func TestNewClient(t *testing.T) {
 		datasetID := testutil.GetEnvOrSkip(t, "TEST_BIGQUERY_DATASET_ID")
 
 		ctx := context.Background()
-		client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID))
+		tblName := types.BQTableID("test_table")
+		client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID), tblName)
 		gt.NoError(t, err)
 		gt.V(t, client).NotEqual(nil)
 	})
