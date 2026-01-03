@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
@@ -339,6 +340,7 @@ func (r *scanRepository) BatchUpdateVulnerabilityStatus(ctx context.Context, rep
 	for vulnID, status := range updates {
 		if vuln, exists := targetData.vulns[vulnID]; exists {
 			vuln.Status = status
+			vuln.UpdatedAt = time.Now()
 		}
 	}
 

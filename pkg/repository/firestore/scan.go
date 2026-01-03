@@ -492,6 +492,7 @@ func (r *scanRepository) BatchUpdateVulnerabilityStatus(ctx context.Context, rep
 			docRef := vulnCollection.Doc(u.id)
 			batch.Update(docRef, []firestore.Update{
 				{Path: "Status", Value: u.status},
+				{Path: "UpdatedAt", Value: firestore.ServerTimestamp},
 			})
 		}
 
