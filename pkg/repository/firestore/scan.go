@@ -46,16 +46,13 @@ func ToFirestoreID(owner, repo string) (string, error) {
 	return owner + ":" + repo, nil
 }
 
-// ToBranchDocID converts a branch name to a Firestore-safe document ID
+// toBranchDocID converts a branch name to a Firestore-safe document ID
 // Replaces "/" with ":" since Git branch names can contain "/" (e.g., "feature/foo")
 // but Git ref names cannot contain ":", so this replacement is safe and reversible
-func ToBranchDocID(branchName string) string {
+// Note: This conversion is only for Firestore document IDs. The actual branch name
+// stored in the document remains unchanged.
+func toBranchDocID(branchName string) string {
 	return strings.ReplaceAll(branchName, "/", ":")
-}
-
-// FromBranchDocID converts a Firestore document ID back to a branch name
-func FromBranchDocID(docID string) string {
-	return strings.ReplaceAll(docID, ":", "/")
 }
 
 // Repository operations
@@ -161,7 +158,7 @@ func (r *scanRepository) CreateOrUpdateBranch(ctx context.Context, repoID types.
 	}
 
 	docRef := r.client.Collection(collectionRepo).Doc(firestoreID).
-		Collection(collectionBranch).Doc(string(branch.Name))
+		Collection(collectionBranch).Doc(toBranchDocID(string(branch.Name)))
 
 	_, err = docRef.Set(ctx, branch)
 	if err != nil {
@@ -188,7 +185,7 @@ func (r *scanRepository) GetBranch(ctx context.Context, repoID types.GitHubRepoI
 	}
 
 	docRef := r.client.Collection(collectionRepo).Doc(firestoreID).
-		Collection(collectionBranch).Doc(ToBranchDocID(string(branchName)))
+		Collection(collectionBranch).Doc(toBranchDocID(string(branchName)))
 
 	snap, err := docRef.Get(ctx)
 	if err != nil {
@@ -271,7 +268,7 @@ func (r *scanRepository) CreateOrUpdateTarget(ctx context.Context, repoID types.
 	}
 
 	docRef := r.client.Collection(collectionRepo).Doc(firestoreID).
-		Collection(collectionBranch).Doc(ToBranchDocID(string(branchName))).
+		Collection(collectionBranch).Doc(toBranchDocID(string(branchName))).
 		Collection(collectionTarget).Doc(string(target.ID))
 
 	_, err = docRef.Set(ctx, target)
@@ -300,7 +297,7 @@ func (r *scanRepository) GetTarget(ctx context.Context, repoID types.GitHubRepoI
 	}
 
 	docRef := r.client.Collection(collectionRepo).Doc(firestoreID).
-		Collection(collectionBranch).Doc(ToBranchDocID(string(branchName))).
+		Collection(collectionBranch).Doc(toBranchDocID(string(branchName))).
 		Collection(collectionTarget).Doc(string(targetID))
 
 	snap, err := docRef.Get(ctx)
@@ -345,7 +342,7 @@ func (r *scanRepository) ListTargets(ctx context.Context, repoID types.GitHubRep
 	}
 
 	iter := r.client.Collection(collectionRepo).Doc(firestoreID).
-		Collection(collectionBranch).Doc(ToBranchDocID(string(branchName))).
+		Collection(collectionBranch).Doc(toBranchDocID(string(branchName))).
 		Collection(collectionTarget).Documents(ctx)
 	defer iter.Stop()
 
@@ -389,7 +386,7 @@ func (r *scanRepository) ListVulnerabilities(ctx context.Context, repoID types.G
 	}
 
 	iter := r.client.Collection(collectionRepo).Doc(firestoreID).
-		Collection(collectionBranch).Doc(ToBranchDocID(string(branchName))).
+		Collection(collectionBranch).Doc(toBranchDocID(string(branchName))).
 		Collection(collectionTarget).Doc(string(targetID)).
 		Collection(collectionVulnerability).Documents(ctx)
 	defer iter.Stop()
@@ -433,7 +430,7 @@ func (r *scanRepository) BatchCreateVulnerabilities(ctx context.Context, repoID 
 	}
 
 	vulnCollection := r.client.Collection(collectionRepo).Doc(firestoreID).
-		Collection(collectionBranch).Doc(ToBranchDocID(string(branchName))).
+		Collection(collectionBranch).Doc(toBranchDocID(string(branchName))).
 		Collection(collectionTarget).Doc(string(targetID)).
 		Collection(collectionVulnerability)
 
@@ -478,7 +475,7 @@ func (r *scanRepository) BatchUpdateVulnerabilityStatus(ctx context.Context, rep
 	}
 
 	vulnCollection := r.client.Collection(collectionRepo).Doc(firestoreID).
-		Collection(collectionBranch).Doc(ToBranchDocID(string(branchName))).
+		Collection(collectionBranch).Doc(toBranchDocID(string(branchName))).
 		Collection(collectionTarget).Doc(string(targetID)).
 		Collection(collectionVulnerability)
 

@@ -24,6 +24,9 @@ func TestAll(t *testing.T, repo interfaces.ScanRepository) {
 	t.Run("BranchCRUD", func(t *testing.T) {
 		TestBranchCRUD(t, repo)
 	})
+	t.Run("BranchWithSlash", func(t *testing.T) {
+		TestBranchWithSlash(t, repo)
+	})
 	t.Run("TargetCRUD", func(t *testing.T) {
 		TestTargetCRUD(t, repo)
 	})
@@ -464,4 +467,103 @@ func TestVulnerabilityStatusUpdate(t *testing.T, repo interfaces.ScanRepository)
 
 	gt.V(t, vulnMap["CVE-2021-0001"].Status).Equal(types.VulnStatusFixed)
 	gt.V(t, vulnMap["CVE-2021-0002"].Status).Equal(types.VulnStatusActive)
+}
+
+// TestBranchWithSlash tests branch names containing "/" which must be safely converted for Firestore
+func TestBranchWithSlash(t *testing.T, repo interfaces.ScanRepository) {
+	ctx := context.Background()
+
+	// Generate unique IDs for this test
+	owner := fmt.Sprintf("owner-%s", uuid.New().String()[:8])
+	repoName := fmt.Sprintf("repo-%s", uuid.New().String()[:8])
+	repoID := types.GitHubRepoID(fmt.Sprintf("%s/%s", owner, repoName))
+
+	// First create a repository
+	now := time.Now()
+	testRepo := &model.Repository{
+		ID:             repoID,
+		Owner:          owner,
+		Name:           repoName,
+		DefaultBranch:  "main",
+		InstallationID: 12345,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	err := repo.CreateOrUpdateRepository(ctx, testRepo)
+	gt.NoError(t, err)
+
+	// Test various branch names with "/"
+	testCases := []struct {
+		name       string
+		branchName types.BranchName
+	}{
+		{
+			name:       "feature branch",
+			branchName: "feature/foo",
+		},
+		{
+			name:       "multi-level feature branch",
+			branchName: "feature/firestore-scan-repository",
+		},
+		{
+			name:       "deeply nested branch",
+			branchName: "hotfix/bug/urgent/fix",
+		},
+		{
+			name:       "release branch",
+			branchName: "release/v1.0.0",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a branch with "/" in name
+			testBranch := &model.Branch{
+				Name:          tc.branchName,
+				LastScanID:    "scan-123",
+				LastScanAt:    now,
+				LastCommitSHA: "abc123",
+				Status:        types.ScanStatusSuccess,
+				CreatedAt:     now,
+				UpdatedAt:     now,
+			}
+
+			err = repo.CreateOrUpdateBranch(ctx, repoID, testBranch)
+			gt.NoError(t, err)
+
+			// Get the branch back
+			retrieved, err := repo.GetBranch(ctx, repoID, tc.branchName)
+			gt.NoError(t, err)
+			gt.V(t, retrieved.Name).Equal(tc.branchName)
+			gt.V(t, retrieved.LastScanID).Equal(testBranch.LastScanID)
+			gt.V(t, retrieved.Status).Equal(testBranch.Status)
+
+			// Update the branch
+			testBranch.LastScanID = "scan-456"
+			testBranch.Status = types.ScanStatusFailure
+			err = repo.CreateOrUpdateBranch(ctx, repoID, testBranch)
+			gt.NoError(t, err)
+
+			// Verify update
+			retrieved, err = repo.GetBranch(ctx, repoID, tc.branchName)
+			gt.NoError(t, err)
+			gt.V(t, retrieved.LastScanID).Equal(types.ScanID("scan-456"))
+			gt.V(t, retrieved.Status).Equal(types.ScanStatusFailure)
+		})
+	}
+
+	// List all branches and verify they all exist
+	branches, err := repo.ListBranches(ctx, repoID)
+	gt.NoError(t, err)
+	gt.V(t, len(branches)).Equal(len(testCases))
+
+	// Verify all branch names are preserved correctly
+	branchNames := make(map[types.BranchName]bool)
+	for _, b := range branches {
+		branchNames[b.Name] = true
+	}
+
+	for _, tc := range testCases {
+		gt.True(t, branchNames[tc.branchName])
+	}
 }
