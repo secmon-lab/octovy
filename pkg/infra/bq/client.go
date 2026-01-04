@@ -27,11 +27,12 @@ type Client struct {
 	mwClient *managedwriter.Client
 	project  string
 	dataset  string
+	tableID  types.BQTableID
 }
 
 var _ interfaces.BigQuery = (*Client)(nil)
 
-func New(ctx context.Context, projectID types.GoogleProjectID, datasetID types.BQDatasetID, options ...option.ClientOption) (*Client, error) {
+func New(ctx context.Context, projectID types.GoogleProjectID, datasetID types.BQDatasetID, tableID types.BQTableID, options ...option.ClientOption) (*Client, error) {
 	mwClient, err := managedwriter.NewClient(ctx, projectID.String(), options...)
 	if err != nil {
 		return nil, goerr.Wrap(err, "failed to create bigquery client", goerr.V("projectID", projectID))
@@ -47,32 +48,33 @@ func New(ctx context.Context, projectID types.GoogleProjectID, datasetID types.B
 		mwClient: mwClient,
 		project:  projectID.String(),
 		dataset:  datasetID.String(),
+		tableID:  tableID,
 	}, nil
 }
 
 // CreateTable implements interfaces.BigQuery.
-func (x *Client) CreateTable(ctx context.Context, table types.BQTableID, md *bigquery.TableMetadata) error {
-	if err := x.bqClient.Dataset(x.dataset).Table(table.String()).Create(ctx, md); err != nil {
-		return goerr.Wrap(err, "failed to create table", goerr.V("dataset", x.dataset), goerr.V("table", table))
+func (x *Client) CreateTable(ctx context.Context, md *bigquery.TableMetadata) error {
+	if err := x.bqClient.Dataset(x.dataset).Table(x.tableID.String()).Create(ctx, md); err != nil {
+		return goerr.Wrap(err, "failed to create table", goerr.V("dataset", x.dataset), goerr.V("table", x.tableID))
 	}
 	return nil
 }
 
 // GetMetadata implements interfaces.BigQuery. If the table does not exist, it returns nil.
-func (x *Client) GetMetadata(ctx context.Context, table types.BQTableID) (*bigquery.TableMetadata, error) {
-	md, err := x.bqClient.Dataset(x.dataset).Table(table.String()).Metadata(ctx)
+func (x *Client) GetMetadata(ctx context.Context) (*bigquery.TableMetadata, error) {
+	md, err := x.bqClient.Dataset(x.dataset).Table(x.tableID.String()).Metadata(ctx)
 	if err != nil {
 		if gErr, ok := err.(*googleapi.Error); ok && gErr.Code == 404 {
 			return nil, nil
 		}
-		return nil, goerr.Wrap(err, "failed to get table metadata", goerr.V("dataset", x.dataset), goerr.V("table", table))
+		return nil, goerr.Wrap(err, "failed to get table metadata", goerr.V("dataset", x.dataset), goerr.V("table", x.tableID))
 	}
 
 	return md, nil
 }
 
 // Insert implements interfaces.BigQuery.
-func (x *Client) Insert(ctx context.Context, table types.BQTableID, schema bigquery.Schema, data any) error {
+func (x *Client) Insert(ctx context.Context, schema bigquery.Schema, data any) error {
 	convertedSchema, err := adapt.BQSchemaToStorageTableSchema(schema)
 	if err != nil {
 		return goerr.Wrap(err, "failed to convert schema")
@@ -120,7 +122,7 @@ func (x *Client) Insert(ctx context.Context, table types.BQTableID, schema bigqu
 			managedwriter.TableParentFromParts(
 				x.project,
 				x.dataset,
-				table.String(),
+				x.tableID.String(),
 			),
 		),
 		// managedwriter.WithType(managedwriter.CommittedStream),
@@ -188,9 +190,9 @@ encoded = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(encoded, "+",
 }
 
 // UpdateTable implements interfaces.BigQuery.
-func (x *Client) UpdateTable(ctx context.Context, table types.BQTableID, md bigquery.TableMetadataToUpdate, eTag string) error {
-	if _, err := x.bqClient.Dataset(x.dataset).Table(table.String()).Update(ctx, md, eTag); err != nil {
-		return goerr.Wrap(err, "failed to update table", goerr.V("dataset", x.dataset), goerr.V("table", table), goerr.V("meta", md))
+func (x *Client) UpdateTable(ctx context.Context, md bigquery.TableMetadataToUpdate, eTag string) error {
+	if _, err := x.bqClient.Dataset(x.dataset).Table(x.tableID.String()).Update(ctx, md, eTag); err != nil {
+		return goerr.Wrap(err, "failed to update table", goerr.V("dataset", x.dataset), goerr.V("table", x.tableID), goerr.V("meta", md))
 	}
 
 	return nil

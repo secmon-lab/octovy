@@ -2,22 +2,26 @@ package cli
 
 import (
 	"context"
-	"os/exec"
+	"log/slog"
 	"strings"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gots/slice"
 	"github.com/m-mizutani/octovy/pkg/cli/config"
+	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/infra"
 	trivyInfra "github.com/m-mizutani/octovy/pkg/infra/trivy"
 	"github.com/m-mizutani/octovy/pkg/usecase"
+	"github.com/m-mizutani/octovy/pkg/utils/logging"
 	"github.com/urfave/cli/v3"
 )
 
 func scanCommand() *cli.Command {
 	var (
 		bigQuery  config.BigQuery
+		firestore config.Firestore
 		dir       string
 		trivyPath string
 		meta      model.GitHubMetadata
@@ -60,7 +64,7 @@ func scanCommand() *cli.Command {
 				Sources:     cli.EnvVars("OCTOVY_GITHUB_COMMIT_ID"),
 				Destination: &meta.CommitID,
 			},
-		}, bigQuery.Flags()),
+		}, bigQuery.Flags(), firestore.Flags()),
 		Action: func(ctx context.Context, c *cli.Command) error {
 
 			// Auto-detect GitHub metadata from git if not specified
@@ -68,32 +72,49 @@ func scanCommand() *cli.Command {
 				return err
 			}
 
-			return runScan(ctx, dir, trivyPath, meta, &bigQuery)
+			return runScan(ctx, dir, trivyPath, meta, &bigQuery, &firestore)
 		},
 	}
 }
 
-// autoDetectGitMetadata auto-detects GitHub metadata from git command if not already set
+// autoDetectGitMetadata auto-detects GitHub metadata from git repository if not already set
 func autoDetectGitMetadata(ctx context.Context, meta *model.GitHubMetadata) error {
+	repo, err := git.PlainOpen(".")
+	if err != nil {
+		return goerr.Wrap(err, "failed to open git repository")
+	}
+
 	if meta.CommitID == "" {
-		cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
-		output, err := cmd.Output()
+		head, err := repo.Head()
 		if err != nil {
-			return goerr.Wrap(err, "failed to get commit ID from git")
+			return goerr.Wrap(err, "failed to get HEAD")
 		}
-		meta.CommitID = strings.TrimSpace(string(output))
+		meta.CommitID = head.Hash().String()
+	}
+
+	if meta.Branch == "" {
+		head, err := repo.Head()
+		if err != nil {
+			return goerr.Wrap(err, "failed to get HEAD for branch")
+		}
+		if head.Name().IsBranch() {
+			meta.Branch = head.Name().Short()
+		}
 	}
 
 	if meta.Owner == "" || meta.RepoName == "" {
-		cmd := exec.CommandContext(ctx, "git", "remote", "get-url", "origin")
-		output, err := cmd.Output()
+		remote, err := repo.Remote("origin")
 		if err != nil {
-			return goerr.Wrap(err, "failed to get remote URL from git")
+			return goerr.Wrap(err, "failed to get remote origin")
+		}
+
+		if len(remote.Config().URLs) == 0 {
+			return goerr.New("no remote URL found")
 		}
 
 		// Parse git remote URL (e.g., git@github.com:owner/repo.git or https://github.com/owner/repo.git)
-		url := strings.TrimSpace(string(output))
-		var owner, repo string
+		url := remote.Config().URLs[0]
+		var owner, repoName string
 
 		if strings.HasPrefix(url, "git@github.com:") {
 			// SSH format: git@github.com:owner/repo.git
@@ -102,7 +123,7 @@ func autoDetectGitMetadata(ctx context.Context, meta *model.GitHubMetadata) erro
 			ownerRepo := strings.Split(parts, "/")
 			if len(ownerRepo) == 2 {
 				owner = ownerRepo[0]
-				repo = ownerRepo[1]
+				repoName = ownerRepo[1]
 			}
 		} else if strings.Contains(url, "github.com/") {
 			// HTTPS format: https://github.com/owner/repo.git
@@ -112,12 +133,12 @@ func autoDetectGitMetadata(ctx context.Context, meta *model.GitHubMetadata) erro
 				ownerRepo := strings.Split(parts[1], "/")
 				if len(ownerRepo) == 2 {
 					owner = ownerRepo[0]
-					repo = ownerRepo[1]
+					repoName = ownerRepo[1]
 				}
 			}
 		}
 
-		if owner == "" || repo == "" {
+		if owner == "" || repoName == "" {
 			return goerr.New("failed to parse GitHub owner/repo from git remote URL", goerr.V("url", url))
 		}
 
@@ -125,28 +146,54 @@ func autoDetectGitMetadata(ctx context.Context, meta *model.GitHubMetadata) erro
 			meta.Owner = owner
 		}
 		if meta.RepoName == "" {
-			meta.RepoName = repo
+			meta.RepoName = repoName
 		}
 	}
 
 	return nil
 }
 
-func runScan(ctx context.Context, dir, trivyPath string, meta model.GitHubMetadata, bigQuery *config.BigQuery) error {
+func runScan(ctx context.Context, dir, trivyPath string, meta model.GitHubMetadata, bigQuery *config.BigQuery, firestoreConfig *config.Firestore) error {
+	// Log scan configuration
+	logging.Default().Info("Starting scan",
+		slog.String("dir", dir),
+		slog.String("trivy_path", trivyPath),
+		slog.String("github_owner", meta.Owner),
+		slog.String("github_repo", meta.RepoName),
+		slog.String("github_branch", meta.Branch),
+		slog.String("github_commit", meta.CommitID),
+		slog.Any("bigquery", bigQuery),
+		slog.Bool("firestore_enabled", firestoreConfig.Enabled()),
+	)
+
 	// Create BigQuery client if configured
 	bqClient, err := bigQuery.NewClient(ctx)
 	if err != nil {
 		return goerr.Wrap(err, "failed to create BigQuery client")
 	}
 
+	// Create Firestore repository if configured
+	var firestoreRepo interfaces.ScanRepository
+	if firestoreConfig.Enabled() {
+		repo, err := firestoreConfig.NewRepository(ctx)
+		if err != nil {
+			return goerr.Wrap(err, "failed to create Firestore repository")
+		}
+		firestoreRepo = repo
+	}
+
 	// Create clients and usecase
 	trivyClient := trivyInfra.New(trivyPath)
-	clients := infra.New(
+	clientOpts := []infra.Option{
 		infra.WithTrivy(trivyClient),
 		infra.WithBigQuery(bqClient),
-	)
+	}
+	if firestoreRepo != nil {
+		clientOpts = append(clientOpts, infra.WithScanRepository(firestoreRepo))
+	}
+	clients := infra.New(clientOpts...)
 
-	uc := usecase.New(clients, usecase.WithBigQueryTableID(bigQuery.TableID()))
+	uc := usecase.New(clients)
 
 	// Scan directory and insert to BigQuery
 	if err := uc.ScanAndInsert(ctx, dir, meta); err != nil {

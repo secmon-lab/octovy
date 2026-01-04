@@ -37,8 +37,9 @@ type GitHubCommit struct {
 
 type GitHubMetadata struct {
 	GitHubCommit
-	PullRequest   *GitHubPullRequest `json:"pull_request"`
-	DefaultBranch string             `json:"default_branch"`
+	PullRequest    *GitHubPullRequest `json:"pull_request"`
+	DefaultBranch  string             `json:"default_branch"`
+	InstallationID int64              `json:"installation_id"`
 }
 
 type GitHubPullRequest struct {

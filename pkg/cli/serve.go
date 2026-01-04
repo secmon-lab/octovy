@@ -30,6 +30,7 @@ func serveCommand() *cli.Command {
 
 		githubApp config.GitHubApp
 		bigQuery  config.BigQuery
+		firestore config.Firestore
 		sentry    config.Sentry
 	)
 	serveFlags := []cli.Flag{
@@ -57,6 +58,7 @@ func serveCommand() *cli.Command {
 			serveFlags,
 			githubApp.Flags(),
 			bigQuery.Flags(),
+			firestore.Flags(),
 			sentry.Flags(),
 		),
 		Action: func(ctx context.Context, c *cli.Command) error {
@@ -65,6 +67,7 @@ func serveCommand() *cli.Command {
 				slog.Any("TrivyPath", trivyPath),
 				slog.Any("GitHubApp", githubApp),
 				slog.Any("BigQuery", bigQuery),
+				slog.Any("Firestore", firestore),
 				slog.Any("Sentry", sentry),
 			)
 
@@ -86,6 +89,14 @@ func serveCommand() *cli.Command {
 				return err
 			} else if bqClient != nil {
 				infraOptions = append(infraOptions, infra.WithBigQuery(bqClient))
+			}
+
+			if firestore.Enabled() {
+				repo, err := firestore.NewRepository(ctx)
+				if err != nil {
+					return goerr.Wrap(err, "failed to create Firestore repository")
+				}
+				infraOptions = append(infraOptions, infra.WithScanRepository(repo))
 			}
 
 			clients := infra.New(infraOptions...)

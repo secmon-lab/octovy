@@ -73,7 +73,8 @@ func githubEventToScanInput(event interface{}) *model.ScanGitHubRepoInput {
 						Email: ev.GetHeadCommit().GetCommitter().GetEmail(),
 					},
 				},
-				DefaultBranch: ev.GetRepo().GetDefaultBranch(),
+				DefaultBranch:  ev.GetRepo().GetDefaultBranch(),
+				InstallationID: ev.GetInstallation().GetID(),
 			},
 			InstallID: types.GitHubAppInstallID(ev.GetInstallation().GetID()),
 		}
@@ -107,7 +108,8 @@ func githubEventToScanInput(event interface{}) *model.ScanGitHubRepoInput {
 						Email: pr.GetHead().GetUser().GetEmail(),
 					},
 				},
-				DefaultBranch: ev.GetRepo().GetDefaultBranch(),
+				DefaultBranch:  ev.GetRepo().GetDefaultBranch(),
+				InstallationID: ev.GetInstallation().GetID(),
 				PullRequest: &model.GitHubPullRequest{
 					ID:           pr.GetID(),
 					Number:       pr.GetNumber(),

@@ -53,10 +53,6 @@ func (x *BigQuery) Flags() []cli.Flag {
 	}
 }
 
-func (x *BigQuery) TableID() types.BQTableID {
-	return x.tableID
-}
-
 func (x *BigQuery) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.Any("ProjectID", x.projectID),
@@ -86,5 +82,5 @@ func (x *BigQuery) NewClient(ctx context.Context) (interfaces.BigQuery, error) {
 		options = append(options, option.WithTokenSource(ts))
 	}
 
-	return bq.New(ctx, x.projectID, x.datasetID, options...)
+	return bq.New(ctx, x.projectID, x.datasetID, x.tableID, options...)
 }
