@@ -294,17 +294,27 @@ octovy serve
 
 **Using Docker:**
 
+The Docker image does not include Trivy. You must provide Trivy binary by mounting it from the host:
+
 ```bash
+# Install Trivy on your host system first
+# See: https://aquasecurity.github.io/trivy/latest/getting-started/installation/
+
+# Run Octovy with Trivy mounted from host
 docker run -p 8080:8080 \
   -v /path/to/private-key.pem:/key.pem \
+  -v $(which trivy):/trivy \
   -e OCTOVY_ADDR=:8080 \
   -e OCTOVY_GITHUB_APP_ID=123456 \
   -e OCTOVY_GITHUB_APP_PRIVATE_KEY=/key.pem \
   -e OCTOVY_GITHUB_APP_SECRET=your-webhook-secret \
   -e OCTOVY_BIGQUERY_PROJECT_ID=my-project \
   -e OCTOVY_BIGQUERY_DATASET_ID=octovy \
+  -e OCTOVY_TRIVY_PATH=/trivy \
   ghcr.io/secmon-lab/octovy
 ```
+
+Alternatively, you can build a custom image with Trivy included. See [examples/Dockerfile](examples/Dockerfile) for a multi-stage build example.
 
 **How it works:**
 1. Receives webhook events from GitHub (`push` and `pull_request`)
