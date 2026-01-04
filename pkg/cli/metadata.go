@@ -16,20 +16,17 @@ func AutoDetectGitMetadata(ctx context.Context, meta *model.GitHubMetadata) erro
 		return goerr.Wrap(err, "failed to open git repository")
 	}
 
-	if meta.CommitID == "" {
+	if meta.CommitID == "" || meta.Branch == "" {
 		head, err := repo.Head()
 		if err != nil {
 			return goerr.Wrap(err, "failed to get HEAD")
 		}
-		meta.CommitID = head.Hash().String()
-	}
 
-	if meta.Branch == "" {
-		head, err := repo.Head()
-		if err != nil {
-			return goerr.Wrap(err, "failed to get HEAD for branch")
+		if meta.CommitID == "" {
+			meta.CommitID = head.Hash().String()
 		}
-		if head.Name().IsBranch() {
+
+		if meta.Branch == "" && head.Name().IsBranch() {
 			meta.Branch = head.Name().Short()
 		}
 	}
