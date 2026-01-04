@@ -1,4 +1,4 @@
-FROM golang:1.24.3 AS build-go
+FROM golang:1.25.5 AS build-go
 ENV CGO_ENABLED=0
 ARG BUILD_VERSION
 
@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build go build -o octovy -ldflags 
 FROM gcr.io/distroless/base:nonroot
 USER nonroot
 COPY --from=build-go /app/octovy /octovy
-COPY --from=aquasec/trivy:0.50.4 /usr/local/bin/trivy /trivy
+COPY --from=aquasec/trivy:0.68.1 /usr/local/bin/trivy /trivy
 WORKDIR /
 ENV OCTOVY_ADDR="0.0.0.0:8000"
 ENV OCTOVY_TRIVY_PATH=/trivy

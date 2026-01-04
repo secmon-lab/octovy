@@ -46,6 +46,7 @@ func TestRepositoryCRUD(t *testing.T, repo interfaces.ScanRepository) {
 	owner := fmt.Sprintf("owner-%s", uuid.New().String()[:8])
 	repoName := fmt.Sprintf("repo-%s", uuid.New().String()[:8])
 	repoID := types.GitHubRepoID(fmt.Sprintf("%s/%s", owner, repoName))
+	installationID := int64(10000 + (uuid.New().ID() % 90000)) // Random installation ID between 10000-99999
 
 	// Create a repository
 	now := time.Now()
@@ -54,7 +55,7 @@ func TestRepositoryCRUD(t *testing.T, repo interfaces.ScanRepository) {
 		Owner:          owner,
 		Name:           repoName,
 		DefaultBranch:  "main",
-		InstallationID: 12345,
+		InstallationID: installationID,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -83,7 +84,7 @@ func TestRepositoryCRUD(t *testing.T, repo interfaces.ScanRepository) {
 	gt.V(t, retrieved.DefaultBranch).Equal(types.BranchName("develop"))
 
 	// List repositories by installation ID
-	repos, err := repo.ListRepositories(ctx, 12345)
+	repos, err := repo.ListRepositories(ctx, installationID)
 	gt.NoError(t, err)
 	gt.V(t, len(repos)).Equal(1)
 	gt.V(t, repos[0].ID).Equal(testRepo.ID)
