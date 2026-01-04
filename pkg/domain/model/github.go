@@ -42,6 +42,19 @@ type GitHubMetadata struct {
 	InstallationID int64              `json:"installation_id"`
 }
 
+// ValidateBasic validates that required GitHub metadata fields are not empty.
+// Unlike GitHubCommit.Validate(), this does not validate CommitID format.
+func (x *GitHubMetadata) ValidateBasic() error {
+	if x.Owner == "" || x.RepoName == "" || x.CommitID == "" {
+		return goerr.New("required GitHub metadata is missing",
+			goerr.V("owner", x.Owner),
+			goerr.V("repo", x.RepoName),
+			goerr.V("commitID", x.CommitID),
+		)
+	}
+	return nil
+}
+
 type GitHubPullRequest struct {
 	ID           int64      `json:"id"`
 	Number       int        `json:"number"`

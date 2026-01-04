@@ -150,6 +150,73 @@ func TestGitHubMetadata(t *testing.T) {
 	})
 }
 
+func TestGitHubMetadataValidateBasic(t *testing.T) {
+	t.Run("all required fields present", func(t *testing.T) {
+		meta := &model.GitHubMetadata{
+			GitHubCommit: model.GitHubCommit{
+				GitHubRepo: model.GitHubRepo{
+					Owner:    "secmon-lab",
+					RepoName: "octovy",
+				},
+				CommitID: "abc123def456",
+			},
+		}
+		gt.NoError(t, meta.ValidateBasic())
+	})
+
+	t.Run("owner missing", func(t *testing.T) {
+		meta := &model.GitHubMetadata{
+			GitHubCommit: model.GitHubCommit{
+				GitHubRepo: model.GitHubRepo{
+					Owner:    "",
+					RepoName: "octovy",
+				},
+				CommitID: "abc123def456",
+			},
+		}
+		gt.Error(t, meta.ValidateBasic())
+	})
+
+	t.Run("repo missing", func(t *testing.T) {
+		meta := &model.GitHubMetadata{
+			GitHubCommit: model.GitHubCommit{
+				GitHubRepo: model.GitHubRepo{
+					Owner:    "secmon-lab",
+					RepoName: "",
+				},
+				CommitID: "abc123def456",
+			},
+		}
+		gt.Error(t, meta.ValidateBasic())
+	})
+
+	t.Run("commitID missing", func(t *testing.T) {
+		meta := &model.GitHubMetadata{
+			GitHubCommit: model.GitHubCommit{
+				GitHubRepo: model.GitHubRepo{
+					Owner:    "secmon-lab",
+					RepoName: "octovy",
+				},
+				CommitID: "",
+			},
+		}
+		gt.Error(t, meta.ValidateBasic())
+	})
+
+	t.Run("all fields missing", func(t *testing.T) {
+		meta := &model.GitHubMetadata{
+			GitHubCommit: model.GitHubCommit{
+				GitHubRepo: model.GitHubRepo{
+					Owner:    "",
+					RepoName: "",
+				},
+				CommitID: "",
+			},
+		}
+		gt.Error(t, meta.ValidateBasic())
+	})
+}
+
 func TestScanGitHubRepoInputValidate(t *testing.T) {
 	validCommitID := "a" + "1234567890123456789012345678901234567890"[:39]
 

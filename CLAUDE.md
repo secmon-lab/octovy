@@ -24,6 +24,7 @@ The codebase follows clean architecture with clear separation of concerns.
 ### Layer Structure
 - **CLI** ([pkg/cli/](pkg/cli/)): CLI commands using urfave/cli/v3
   - `scan`: Scans local directory with Trivy and inserts results to BigQuery
+  - `insert`: Inserts existing Trivy scan result JSON to BigQuery (and optionally Firestore)
   - `serve`: Starts HTTP server for GitHub webhook handling with graceful shutdown
   - Configuration via [pkg/cli/config/](pkg/cli/config/): GitHubApp, BigQuery, Sentry configs with flag/env binding
 - **Controller** ([pkg/controller/](pkg/controller/)): HTTP server handling
@@ -118,6 +119,15 @@ octovy scan --github-owner myorg --github-repo myrepo --github-commit-id abc123
 
 # Scan with BigQuery configuration
 octovy scan --bigquery-project-id my-project --bigquery-dataset-id my-dataset
+
+# Insert existing Trivy scan result to BigQuery (auto-detects GitHub metadata)
+octovy insert -f scan-result.json
+
+# Insert with explicit GitHub metadata
+octovy insert -f scan-result.json --github-owner myorg --github-repo myrepo --github-commit-id abc123
+
+# Insert with BigQuery and Firestore configuration
+octovy insert -f scan-result.json --bigquery-project-id my-project --firestore-project-id my-project
 
 # Start webhook server
 octovy serve --addr :8080
@@ -403,6 +413,7 @@ Required for server operation:
 - `OCTOVY_GITHUB_APP_SECRET`: Webhook secret for verifying GitHub requests
 
 Optional configuration:
+- `OCTOVY_RESULT_FILE`: Path to Trivy scan result JSON file (used by `insert` command)
 - `OCTOVY_TRIVY_PATH`: Path to trivy binary (default: `trivy`)
 - `OCTOVY_BIGQUERY_PROJECT_ID`: BigQuery project ID for storing scan results
 - `OCTOVY_BIGQUERY_DATASET_ID`: BigQuery dataset ID (default: `octovy`)

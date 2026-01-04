@@ -56,6 +56,7 @@ func (x *CLI) Run(argv []string) error {
 		Commands: []*cli.Command{
 			serveCommand(),
 			scanCommand(),
+			insertCommand(),
 		},
 		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
 			if err := ConfigureLogging(logFormat, logLevel, logOutput); err != nil {

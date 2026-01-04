@@ -59,6 +59,7 @@ func TestReportValidation(t *testing.T) {
 			SchemaVersion: 2,
 			ArtifactName:  "test-artifact",
 			ArtifactType:  "filesystem",
+			Results:       trivy.Results{},
 		}
 		gt.NoError(t, report.Validate())
 	})
@@ -67,6 +68,27 @@ func TestReportValidation(t *testing.T) {
 		report := trivy.Report{
 			SchemaVersion: 0,
 			ArtifactName:  "test-artifact",
+			Results:       trivy.Results{},
+		}
+		err := report.Validate()
+		gt.Error(t, err)
+	})
+
+	t.Run("Missing artifact name fails validation", func(t *testing.T) {
+		report := trivy.Report{
+			SchemaVersion: 2,
+			ArtifactName:  "",
+			Results:       trivy.Results{},
+		}
+		err := report.Validate()
+		gt.Error(t, err)
+	})
+
+	t.Run("Nil results fails validation", func(t *testing.T) {
+		report := trivy.Report{
+			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
+			Results:       nil,
 		}
 		err := report.Validate()
 		gt.Error(t, err)

@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -25,7 +24,6 @@ import (
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/mock"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
-	"github.com/m-mizutani/octovy/pkg/domain/model/trivy"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"github.com/m-mizutani/octovy/pkg/infra"
 	"github.com/m-mizutani/octovy/pkg/infra/ghapp"
@@ -695,12 +693,9 @@ func TestScanDirectory(t *testing.T) {
 			for i, arg := range args {
 				if arg == "--output" && i+1 < len(args) {
 					outputFile := args[i+1]
-					testReport := trivy.Report{
-						SchemaVersion: 2,
-						ArtifactName:  "test",
-					}
-					data, _ := json.Marshal(testReport)
-					os.WriteFile(outputFile, data, 0644)
+					// Write JSON with explicit Results field
+					testJSON := `{"SchemaVersion":2,"ArtifactName":"test","Results":[]}`
+					os.WriteFile(outputFile, []byte(testJSON), 0644)
 					break
 				}
 			}
@@ -785,9 +780,8 @@ func TestScanGitHubRepoCleanup(t *testing.T) {
 			// Write valid JSON to output file
 			for i, arg := range args {
 				if arg == "--output" && i+1 < len(args) {
-					report := trivy.Report{SchemaVersion: 2}
-					data, _ := json.Marshal(report)
-					os.WriteFile(args[i+1], data, 0644)
+					testJSON := `{"SchemaVersion":2,"ArtifactName":"test","Results":[]}`
+					os.WriteFile(args[i+1], []byte(testJSON), 0644)
 					break
 				}
 			}
