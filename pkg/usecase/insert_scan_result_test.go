@@ -54,6 +54,7 @@ func TestInsertScanResult(t *testing.T) {
 		}
 		report := trivy.Report{
 			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
 			Results: []trivy.Result{
 				{
 					Target: "test-target",
@@ -137,6 +138,8 @@ func TestInsertScanResult(t *testing.T) {
 		}
 		report := trivy.Report{
 			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
+			Results:       trivy.Results{},
 		}
 
 		gt.NoError(t, uc.InsertScanResult(ctx, meta, report))
@@ -179,7 +182,7 @@ func TestInsertScanResult(t *testing.T) {
 			},
 			InstallationID: 456,
 		}
-		report := trivy.Report{SchemaVersion: 2}
+		report := trivy.Report{SchemaVersion: 2, ArtifactName: "test-artifact", Results: trivy.Results{}}
 
 		gt.NoError(t, uc.InsertScanResult(ctx, meta, report))
 		gt.True(t, createTableCalled)
@@ -228,6 +231,7 @@ func TestInsertScanResult(t *testing.T) {
 		}
 		report := trivy.Report{
 			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
 			Results: []trivy.Result{
 				{
 					Target: "test-target",
@@ -289,6 +293,7 @@ func TestInsertScanResult(t *testing.T) {
 		// Scenario 1: First scan - new vulnerabilities should be Active
 		report1 := trivy.Report{
 			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
 			Results: []trivy.Result{
 				{
 					Target: "go.mod",
@@ -327,6 +332,7 @@ func TestInsertScanResult(t *testing.T) {
 		// Scenario 3: Third scan - vulnerability fixed (not detected)
 		report2 := trivy.Report{
 			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
 			Results: []trivy.Result{
 				{
 					Target: "go.mod",

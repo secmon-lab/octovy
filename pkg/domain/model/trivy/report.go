@@ -16,10 +16,16 @@ type Report struct {
 	Results       Results      `json:",omitempty"`
 }
 
-// Validate checks the required fields are filled. Currently, it checks only schema version.
+// Validate checks the required fields are filled.
 func (x *Report) Validate() error {
 	if x.SchemaVersion == 0 {
 		return goerr.Wrap(types.ErrValidationFailed, "schema version is empty")
+	}
+	if x.ArtifactName == "" {
+		return goerr.Wrap(types.ErrValidationFailed, "artifact name is empty")
+	}
+	if x.Results == nil {
+		return goerr.Wrap(types.ErrValidationFailed, "results is nil")
 	}
 	return nil
 }

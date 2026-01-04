@@ -3,7 +3,6 @@ package usecase
 import (
 	"archive/zip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,28 +116,14 @@ func (x *UseCase) scanDirectory(ctx context.Context, codeDir string) (*trivy.Rep
 		return nil, goerr.Wrap(err, "failed to scan local directory")
 	}
 
-	var report trivy.Report
-	if err := unmarshalFile(tmpResult.Name(), &report); err != nil {
+	report, err := LoadTrivyReportFromFile(ctx, tmpResult.Name())
+	if err != nil {
 		return nil, err
 	}
 
 	logging.From(ctx).Debug("Scan result saved", "result_file", tmpResult.Name())
 
-	return &report, nil
-}
-
-func unmarshalFile(path string, v any) error {
-	fd, err := os.Open(filepath.Clean(path))
-	if err != nil {
-		return goerr.Wrap(err, "failed to open file", goerr.V("path", path))
-	}
-	defer safe.Close(fd)
-
-	if err := json.NewDecoder(fd).Decode(v); err != nil {
-		return goerr.Wrap(err, "failed to decode json", goerr.V("path", path))
-	}
-
-	return nil
+	return report, nil
 }
 
 // ScanDirectoryForTest is exported for testing purposes
