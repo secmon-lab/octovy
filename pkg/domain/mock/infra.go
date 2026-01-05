@@ -29,7 +29,7 @@ var _ interfaces.BigQuery = &BigQueryMock{}
 //			GetMetadataFunc: func(ctx context.Context) (*bigquery.TableMetadata, error) {
 //				panic("mock out the GetMetadata method")
 //			},
-//			InsertFunc: func(ctx context.Context, schema bigquery.Schema, data any) error {
+//			InsertFunc: func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 //				panic("mock out the Insert method")
 //			},
 //			UpdateTableFunc: func(ctx context.Context, md bigquery.TableMetadataToUpdate, eTag string) error {
@@ -49,7 +49,7 @@ type BigQueryMock struct {
 	GetMetadataFunc func(ctx context.Context) (*bigquery.TableMetadata, error)
 
 	// InsertFunc mocks the Insert method.
-	InsertFunc func(ctx context.Context, schema bigquery.Schema, data any) error
+	InsertFunc func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error
 
 	// UpdateTableFunc mocks the UpdateTable method.
 	UpdateTableFunc func(ctx context.Context, md bigquery.TableMetadataToUpdate, eTag string) error
@@ -76,6 +76,8 @@ type BigQueryMock struct {
 			Schema bigquery.Schema
 			// Data is the data argument value.
 			Data any
+			// Opts is the opts argument value.
+			Opts []interfaces.BigQueryInsertOption
 		}
 		// UpdateTable holds details about calls to the UpdateTable method.
 		UpdateTable []struct {
@@ -162,7 +164,7 @@ func (mock *BigQueryMock) GetMetadataCalls() []struct {
 }
 
 // Insert calls InsertFunc.
-func (mock *BigQueryMock) Insert(ctx context.Context, schema bigquery.Schema, data any) error {
+func (mock *BigQueryMock) Insert(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 	if mock.InsertFunc == nil {
 		panic("BigQueryMock.InsertFunc: method is nil but BigQuery.Insert was just called")
 	}
@@ -170,15 +172,17 @@ func (mock *BigQueryMock) Insert(ctx context.Context, schema bigquery.Schema, da
 		Ctx    context.Context
 		Schema bigquery.Schema
 		Data   any
+		Opts   []interfaces.BigQueryInsertOption
 	}{
 		Ctx:    ctx,
 		Schema: schema,
 		Data:   data,
+		Opts:   opts,
 	}
 	mock.lockInsert.Lock()
 	mock.calls.Insert = append(mock.calls.Insert, callInfo)
 	mock.lockInsert.Unlock()
-	return mock.InsertFunc(ctx, schema, data)
+	return mock.InsertFunc(ctx, schema, data, opts...)
 }
 
 // InsertCalls gets all the calls that were made to Insert.
@@ -189,11 +193,13 @@ func (mock *BigQueryMock) InsertCalls() []struct {
 	Ctx    context.Context
 	Schema bigquery.Schema
 	Data   any
+	Opts   []interfaces.BigQueryInsertOption
 } {
 	var calls []struct {
 		Ctx    context.Context
 		Schema bigquery.Schema
 		Data   any
+		Opts   []interfaces.BigQueryInsertOption
 	}
 	mock.lockInsert.RLock()
 	calls = mock.calls.Insert

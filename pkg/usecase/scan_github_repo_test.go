@@ -121,7 +121,7 @@ func TestScanGitHubRepo(t *testing.T) {
 	}
 
 	var calledBQInsert int
-	mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+	mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 		calledBQInsert++
 		return nil
 	}
@@ -150,7 +150,7 @@ func TestScanGitHubRepoCleansTempAndPersistsMetadata(t *testing.T) {
 	ctx := context.Background()
 
 	var inserted *model.ScanRawRecord
-	fx.mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+	fx.mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 		var ok bool
 		inserted, ok = data.(*model.ScanRawRecord)
 		gt.True(t, ok)
@@ -191,7 +191,7 @@ func TestScanGitHubRepoRejectsPathTraversal(t *testing.T) {
 	fx := newScanTestFixture(t, zipData)
 	ctx := context.Background()
 
-	fx.mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+	fx.mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 		t.Fatalf("Insert should not be called when extraction fails")
 		return nil
 	}
@@ -224,7 +224,7 @@ func TestScanGitHubRepoTrivyError(t *testing.T) {
 	fx.mockTrivy.mockRun = func(ctx context.Context, args []string) error {
 		return errors.New("trivy failed")
 	}
-	fx.mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+	fx.mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 		t.Fatalf("Insert should not be called when Trivy fails")
 		return nil
 	}
@@ -310,7 +310,7 @@ func newScanTestFixture(t *testing.T, zipData []byte) *scanTestFixture {
 	mockBQ.CreateTableFunc = func(ctx context.Context, md *bigquery.TableMetadata) error {
 		return nil
 	}
-	mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+	mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 		return nil
 	}
 

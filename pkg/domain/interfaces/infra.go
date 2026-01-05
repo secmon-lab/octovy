@@ -12,8 +12,20 @@ import (
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 )
 
+type BigQueryInsertOption func(*BigQueryInsertConfig)
+
+type BigQueryInsertConfig struct {
+	EnableRetry bool
+}
+
+func WithRetry(retry bool) BigQueryInsertOption {
+	return func(c *BigQueryInsertConfig) {
+		c.EnableRetry = retry
+	}
+}
+
 type BigQuery interface {
-	Insert(ctx context.Context, schema bigquery.Schema, data any) error
+	Insert(ctx context.Context, schema bigquery.Schema, data any, opts ...BigQueryInsertOption) error
 
 	GetMetadata(ctx context.Context) (*bigquery.TableMetadata, error)
 	UpdateTable(ctx context.Context, md bigquery.TableMetadataToUpdate, eTag string) error
