@@ -55,6 +55,48 @@ func TestLoadTrivyReport(t *testing.T) {
 
 		gt.Error(t, err)
 	})
+
+	t.Run("result with empty target", func(t *testing.T) {
+		emptyTargetJSON := `{
+  "SchemaVersion": 2,
+  "ArtifactName": ".",
+  "ArtifactType": "filesystem",
+  "Results": [
+    {
+      "Target": "",
+      "Type": "gomod"
+    }
+  ]
+}`
+		reader := strings.NewReader(emptyTargetJSON)
+		_, err := usecase.LoadTrivyReport(ctx, reader)
+
+		gt.Error(t, err)
+		gt.True(t, strings.Contains(err.Error(), "result target is empty"))
+	})
+
+	t.Run("multiple results with one empty target", func(t *testing.T) {
+		mixedJSON := `{
+  "SchemaVersion": 2,
+  "ArtifactName": ".",
+  "ArtifactType": "filesystem",
+  "Results": [
+    {
+      "Target": "go.mod",
+      "Type": "gomod"
+    },
+    {
+      "Target": "",
+      "Type": "npm"
+    }
+  ]
+}`
+		reader := strings.NewReader(mixedJSON)
+		_, err := usecase.LoadTrivyReport(ctx, reader)
+
+		gt.Error(t, err)
+		gt.True(t, strings.Contains(err.Error(), "result target is empty"))
+	})
 }
 
 func TestLoadTrivyReportFromFile(t *testing.T) {

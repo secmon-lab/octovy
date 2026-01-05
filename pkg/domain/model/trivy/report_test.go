@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/m-mizutani/gt"
@@ -92,6 +93,42 @@ func TestReportValidation(t *testing.T) {
 		}
 		err := report.Validate()
 		gt.Error(t, err)
+	})
+
+	t.Run("Result with empty target fails validation", func(t *testing.T) {
+		report := trivy.Report{
+			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
+			Results: trivy.Results{
+				{
+					Target: "",
+					Type:   "gomod",
+				},
+			},
+		}
+		err := report.Validate()
+		gt.Error(t, err)
+		gt.True(t, strings.Contains(err.Error(), "result target is empty"))
+	})
+
+	t.Run("Multiple results with one empty target fails validation", func(t *testing.T) {
+		report := trivy.Report{
+			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
+			Results: trivy.Results{
+				{
+					Target: "go.mod",
+					Type:   "gomod",
+				},
+				{
+					Target: "",
+					Type:   "npm",
+				},
+			},
+		}
+		err := report.Validate()
+		gt.Error(t, err)
+		gt.True(t, strings.Contains(err.Error(), "result target is empty"))
 	})
 }
 
