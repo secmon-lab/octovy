@@ -812,3 +812,314 @@ func TestScanGitHubRepoCleanup(t *testing.T) {
 		}
 	})
 }
+
+func TestScanGitHubRepoRemote(t *testing.T) {
+	t.Run("commit and branch are mutually exclusive", func(t *testing.T) {
+		uc := usecase.New(infra.New())
+		ctx := context.Background()
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner:     "test-owner",
+			Repo:      "test-repo",
+			Commit:    "abc123",
+			Branch:    "main",
+			InstallID: 12345,
+		}
+
+		err := uc.ScanGitHubRepoRemote(ctx, input)
+		gt.Error(t, err)
+		gt.True(t, strings.Contains(err.Error(), "commit and branch cannot be specified at the same time"))
+	})
+
+	t.Run("full specification mode with commit", func(t *testing.T) {
+		fx := newScanTestFixture(t, nil)
+		ctx := context.Background()
+
+		var scanCalled bool
+		fx.mockGH.GetArchiveURLFunc = func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
+			scanCalled = true
+			gt.V(t, input.Owner).Equal("test-owner")
+			gt.V(t, input.Repo).Equal("test-repo")
+			gt.V(t, input.CommitID).Equal("abc1234567890123456789012345678901234567")
+			gt.V(t, input.InstallID).Equal(types.GitHubAppInstallID(12345))
+			return gt.R1(url.Parse("https://example.com/archive.zip")).NoError(t), nil
+		}
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner:     "test-owner",
+			Repo:      "test-repo",
+			Commit:    "abc1234567890123456789012345678901234567",
+			InstallID: 12345,
+		}
+
+		err := fx.uc.ScanGitHubRepoRemote(ctx, input)
+		gt.NoError(t, err)
+		gt.V(t, scanCalled).Equal(true)
+	})
+
+	t.Run("full specification mode with branch resolution", func(t *testing.T) {
+		fx := newScanTestFixture(t, nil)
+		ctx := context.Background()
+
+		var branchResolvedCommit string
+		fx.mockHTTP.mockDo = func(req *http.Request) (*http.Response, error) {
+			// GitHub API branch endpoint
+			if strings.Contains(req.URL.Path, "/branches/") {
+				responseJSON := `{"commit":{"sha":"1234567890123456789012345678901234567890"}}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader([]byte(responseJSON))),
+				}, nil
+			}
+			// Archive download
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(testCodeZip)),
+			}, nil
+		}
+
+		fx.mockGH.GetArchiveURLFunc = func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
+			branchResolvedCommit = input.CommitID
+			return gt.R1(url.Parse("https://example.com/archive.zip")).NoError(t), nil
+		}
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner:     "test-owner",
+			Repo:      "test-repo",
+			Branch:    "main",
+			InstallID: 12345,
+		}
+
+		err := fx.uc.ScanGitHubRepoRemote(ctx, input)
+		gt.NoError(t, err)
+		gt.V(t, branchResolvedCommit).Equal("1234567890123456789012345678901234567890")
+	})
+
+	t.Run("DB completion mode requires Firestore", func(t *testing.T) {
+		// No Firestore configured
+		uc := usecase.New(infra.New())
+		ctx := context.Background()
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner: "test-owner",
+			Repo:  "test-repo",
+		}
+
+		err := uc.ScanGitHubRepoRemote(ctx, input)
+		gt.Error(t, err)
+		gt.True(t, strings.Contains(err.Error(), "DB completion mode requires ScanRepository"))
+	})
+
+	t.Run("DB completion mode fetches from repository", func(t *testing.T) {
+		fx := newScanTestFixture(t, nil)
+		ctx := context.Background()
+
+		mockRepo := &mock.ScanRepositoryMock{}
+		mockRepo.GetRepositoryFunc = func(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error) {
+			gt.V(t, repoID).Equal(types.GitHubRepoID("test-owner/test-repo"))
+			return &model.Repository{
+				ID:             repoID,
+				Owner:          "test-owner",
+				Name:           "test-repo",
+				DefaultBranch:  "main",
+				InstallationID: 67890,
+			}, nil
+		}
+		mockRepo.GetBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName) (*model.Branch, error) {
+			gt.V(t, repoID).Equal(types.GitHubRepoID("test-owner/test-repo"))
+			gt.V(t, branchName).Equal(types.BranchName("main"))
+			return &model.Branch{
+				Name:          "main",
+				LastCommitSHA: "abcdef1234567890123456789012345678901234",
+			}, nil
+		}
+		mockRepo.CreateOrUpdateRepositoryFunc = func(ctx context.Context, repo *model.Repository) error {
+			return nil
+		}
+		mockRepo.CreateOrUpdateBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branch *model.Branch) error {
+			return nil
+		}
+		mockRepo.CreateOrUpdateTargetFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, target *model.Target) error {
+			return nil
+		}
+		mockRepo.ListVulnerabilitiesFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, targetID types.TargetID) ([]*model.Vulnerability, error) {
+			return nil, nil
+		}
+		mockRepo.BatchCreateVulnerabilitiesFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, targetID types.TargetID, vulns []*model.Vulnerability) error {
+			return nil
+		}
+
+		// Create usecase with Firestore repository
+		clients := infra.New(
+			infra.WithGitHubApp(fx.mockGH),
+			infra.WithHTTPClient(fx.mockHTTP),
+			infra.WithTrivy(fx.mockTrivy),
+			infra.WithBigQuery(fx.mockBQ),
+			infra.WithScanRepository(mockRepo),
+		)
+		uc := usecase.New(clients)
+
+		var scanCalledWithCommit string
+		fx.mockGH.GetArchiveURLFunc = func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
+			scanCalledWithCommit = input.CommitID
+			gt.V(t, input.InstallID).Equal(types.GitHubAppInstallID(67890))
+			return gt.R1(url.Parse("https://example.com/archive.zip")).NoError(t), nil
+		}
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner: "test-owner",
+			Repo:  "test-repo",
+		}
+
+		err := uc.ScanGitHubRepoRemote(ctx, input)
+		gt.NoError(t, err)
+		gt.V(t, scanCalledWithCommit).Equal("abcdef1234567890123456789012345678901234")
+	})
+
+	t.Run("DB completion mode with custom branch", func(t *testing.T) {
+		fx := newScanTestFixture(t, nil)
+		ctx := context.Background()
+
+		mockRepo := &mock.ScanRepositoryMock{}
+		mockRepo.GetRepositoryFunc = func(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error) {
+			return &model.Repository{
+				ID:             repoID,
+				Owner:          "test-owner",
+				Name:           "test-repo",
+				DefaultBranch:  "main",
+				InstallationID: 67890,
+			}, nil
+		}
+		mockRepo.GetBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName) (*model.Branch, error) {
+			gt.V(t, branchName).Equal(types.BranchName("feature-branch"))
+			return &model.Branch{
+				Name:          "feature-branch",
+				LastCommitSHA: "fedcba0987654321098765432109876543210987",
+			}, nil
+		}
+		mockRepo.CreateOrUpdateRepositoryFunc = func(ctx context.Context, repo *model.Repository) error {
+			return nil
+		}
+		mockRepo.CreateOrUpdateBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branch *model.Branch) error {
+			return nil
+		}
+		mockRepo.CreateOrUpdateTargetFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, target *model.Target) error {
+			return nil
+		}
+		mockRepo.ListVulnerabilitiesFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, targetID types.TargetID) ([]*model.Vulnerability, error) {
+			return nil, nil
+		}
+		mockRepo.BatchCreateVulnerabilitiesFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, targetID types.TargetID, vulns []*model.Vulnerability) error {
+			return nil
+		}
+
+		clients := infra.New(
+			infra.WithGitHubApp(fx.mockGH),
+			infra.WithHTTPClient(fx.mockHTTP),
+			infra.WithTrivy(fx.mockTrivy),
+			infra.WithBigQuery(fx.mockBQ),
+			infra.WithScanRepository(mockRepo),
+		)
+		uc := usecase.New(clients)
+
+		var scanCalledWithCommit string
+		fx.mockGH.GetArchiveURLFunc = func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
+			scanCalledWithCommit = input.CommitID
+			return gt.R1(url.Parse("https://example.com/archive.zip")).NoError(t), nil
+		}
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner:  "test-owner",
+			Repo:   "test-repo",
+			Branch: "feature-branch",
+		}
+
+		err := uc.ScanGitHubRepoRemote(ctx, input)
+		gt.NoError(t, err)
+		gt.V(t, scanCalledWithCommit).Equal("fedcba0987654321098765432109876543210987")
+	})
+
+	t.Run("DB completion mode repository not found", func(t *testing.T) {
+		ctx := context.Background()
+
+		mockRepo := &mock.ScanRepositoryMock{}
+		mockRepo.GetRepositoryFunc = func(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error) {
+			return nil, errors.New("repository not found")
+		}
+
+		clients := infra.New(
+			infra.WithScanRepository(mockRepo),
+		)
+		uc := usecase.New(clients)
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner: "test-owner",
+			Repo:  "test-repo",
+		}
+
+		err := uc.ScanGitHubRepoRemote(ctx, input)
+		gt.Error(t, err)
+		gt.True(t, strings.Contains(err.Error(), "repository not found"))
+	})
+
+	t.Run("DB completion mode branch not found", func(t *testing.T) {
+		ctx := context.Background()
+
+		mockRepo := &mock.ScanRepositoryMock{}
+		mockRepo.GetRepositoryFunc = func(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error) {
+			return &model.Repository{
+				ID:             repoID,
+				Owner:          "test-owner",
+				Name:           "test-repo",
+				DefaultBranch:  "main",
+				InstallationID: 67890,
+			}, nil
+		}
+		mockRepo.GetBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName) (*model.Branch, error) {
+			return nil, errors.New("branch not found")
+		}
+
+		clients := infra.New(
+			infra.WithScanRepository(mockRepo),
+		)
+		uc := usecase.New(clients)
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner: "test-owner",
+			Repo:  "test-repo",
+		}
+
+		err := uc.ScanGitHubRepoRemote(ctx, input)
+		gt.Error(t, err)
+		gt.S(t, err.Error()).Contains("branch not found")
+	})
+
+	t.Run("branch resolution fails with GitHub API error", func(t *testing.T) {
+		fx := newScanTestFixture(t, nil)
+		ctx := context.Background()
+
+		fx.mockHTTP.mockDo = func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "/branches/") {
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Body:       io.NopCloser(bytes.NewReader([]byte("branch not found"))),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(testCodeZip)),
+			}, nil
+		}
+
+		input := &model.ScanGitHubRepoRemoteInput{
+			Owner:     "test-owner",
+			Repo:      "test-repo",
+			Branch:    "nonexistent",
+			InstallID: 12345,
+		}
+
+		err := fx.uc.ScanGitHubRepoRemote(ctx, input)
+		gt.Error(t, err)
+		gt.S(t, err.Error()).Contains("failed to get branch information")
+	})
+}

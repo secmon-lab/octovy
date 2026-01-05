@@ -20,3 +20,11 @@ func (x *ScanGitHubRepoInput) Validate() error {
 
 	return nil
 }
+
+type ScanGitHubRepoRemoteInput struct {
+	Owner     string
+	Repo      string
+	Commit    string
+	Branch    string
+	InstallID types.GitHubAppInstallID
+}

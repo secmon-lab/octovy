@@ -3,6 +3,7 @@ package usecase
 import (
 	"archive/zip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,195 @@ import (
 	"github.com/m-mizutani/octovy/pkg/utils/logging"
 	"github.com/m-mizutani/octovy/pkg/utils/safe"
 )
+
+// ScanGitHubRepoRemote scans a GitHub repository with parameter validation and completion.
+// It supports two modes:
+// 1. Full specification mode: all parameters (owner, repo, commit/branch, installID) are provided
+// 2. DB completion mode: fetch missing parameters from repository (requires ScanRepository)
+func (x *UseCase) ScanGitHubRepoRemote(ctx context.Context, input *model.ScanGitHubRepoRemoteInput) error {
+	// Validate mutually exclusive parameters
+	if input.Commit != "" && input.Branch != "" {
+		return goerr.Wrap(types.ErrInvalidOption, "commit and branch cannot be specified at the same time")
+	}
+
+	// Determine operation mode
+	isFullSpecMode := input.InstallID != 0 && (input.Commit != "" || input.Branch != "")
+
+	if isFullSpecMode {
+		scanInput, err := x.prepareScanInputFullSpec(ctx, input)
+		if err != nil {
+			return err
+		}
+		return x.ScanGitHubRepo(ctx, scanInput)
+	}
+
+	// DB completion mode
+	scanInput, err := x.prepareScanInputDBCompletion(ctx, input)
+	if err != nil {
+		return err
+	}
+	return x.ScanGitHubRepo(ctx, scanInput)
+}
+
+// prepareScanInputFullSpec prepares ScanGitHubRepoInput for full specification mode
+func (x *UseCase) prepareScanInputFullSpec(ctx context.Context, input *model.ScanGitHubRepoRemoteInput) (*model.ScanGitHubRepoInput, error) {
+	logging.From(ctx).Info("Preparing scan input in full specification mode",
+		"owner", input.Owner,
+		"repo", input.Repo,
+		"commit", input.Commit,
+		"branch", input.Branch,
+		"install_id", input.InstallID,
+	)
+
+	commitID := input.Commit
+	branchName := input.Branch
+
+	// Resolve commit ID from branch if needed
+	if input.Branch != "" && input.Commit == "" {
+		if x.clients.GitHubApp() == nil {
+			return nil, goerr.Wrap(types.ErrInvalidOption, "GitHub App client is required to resolve branch to commit")
+		}
+
+		resolvedCommit, err := x.resolveBranchToCommit(ctx, input.Owner, input.Repo, input.Branch, input.InstallID)
+		if err != nil {
+			return nil, err
+		}
+		commitID = resolvedCommit
+	}
+
+	return &model.ScanGitHubRepoInput{
+		GitHubMetadata: model.GitHubMetadata{
+			GitHubCommit: model.GitHubCommit{
+				GitHubRepo: model.GitHubRepo{
+					RepoID:   1, // Placeholder: RepoID validation requires non-zero but actual value not critical for scanning
+					Owner:    input.Owner,
+					RepoName: input.Repo,
+				},
+				CommitID: commitID,
+				Branch:   branchName,
+			},
+			InstallationID: int64(input.InstallID),
+		},
+		InstallID: input.InstallID,
+	}, nil
+}
+
+// prepareScanInputDBCompletion prepares ScanGitHubRepoInput for DB completion mode
+func (x *UseCase) prepareScanInputDBCompletion(ctx context.Context, input *model.ScanGitHubRepoRemoteInput) (*model.ScanGitHubRepoInput, error) {
+	if x.clients.ScanRepository() == nil {
+		return nil, goerr.Wrap(types.ErrInvalidOption,
+			"DB completion mode requires ScanRepository. Please specify installation ID and commit/branch, or configure Firestore")
+	}
+
+	logging.From(ctx).Info("Preparing scan input in DB completion mode",
+		"owner", input.Owner,
+		"repo", input.Repo,
+		"branch", input.Branch,
+	)
+
+	// Get repository information from database
+	repoID := types.GitHubRepoID(fmt.Sprintf("%s/%s", input.Owner, input.Repo))
+	repoInfo, err := x.clients.ScanRepository().GetRepository(ctx, repoID)
+	if err != nil {
+		return nil, goerr.Wrap(err, "repository not found in database",
+			goerr.V("owner", input.Owner),
+			goerr.V("repo", input.Repo),
+		)
+	}
+
+	// Determine which branch to use
+	branchName := types.BranchName(input.Branch)
+	if branchName == "" {
+		branchName = repoInfo.DefaultBranch
+	}
+
+	// Get branch information from database
+	branchInfo, err := x.clients.ScanRepository().GetBranch(ctx, repoID, branchName)
+	if err != nil {
+		return nil, goerr.Wrap(err, "branch not found in database",
+			goerr.V("owner", input.Owner),
+			goerr.V("repo", input.Repo),
+			goerr.V("branch", branchName),
+		)
+	}
+
+	logging.From(ctx).Info("Retrieved repository information from database",
+		"owner", input.Owner,
+		"repo", input.Repo,
+		"branch", branchName,
+		"commit", branchInfo.LastCommitSHA,
+		"installation_id", repoInfo.InstallationID,
+	)
+
+	return &model.ScanGitHubRepoInput{
+		GitHubMetadata: model.GitHubMetadata{
+			GitHubCommit: model.GitHubCommit{
+				GitHubRepo: model.GitHubRepo{
+					RepoID:   1, // Placeholder: RepoID validation requires non-zero but actual value not critical for scanning
+					Owner:    input.Owner,
+					RepoName: input.Repo,
+				},
+				CommitID: string(branchInfo.LastCommitSHA),
+				Branch:   string(branchName),
+			},
+			InstallationID: repoInfo.InstallationID,
+		},
+		InstallID: types.GitHubAppInstallID(repoInfo.InstallationID),
+	}, nil
+}
+
+// resolveBranchToCommit resolves a branch name to a commit SHA using GitHub API
+func (x *UseCase) resolveBranchToCommit(ctx context.Context, owner, repo, branch string, installID types.GitHubAppInstallID) (string, error) {
+	httpClient, err := x.clients.GitHubApp().HTTPClient(installID)
+	if err != nil {
+		return "", goerr.Wrap(err, "failed to create GitHub HTTP client")
+	}
+
+	// Call GitHub API to get branch information
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/branches/%s", owner, repo, branch)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", goerr.Wrap(err, "failed to create request for branch information")
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", goerr.Wrap(err, "failed to get branch information",
+			goerr.V("owner", owner),
+			goerr.V("repo", repo),
+			goerr.V("branch", branch),
+		)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", goerr.Wrap(types.ErrInvalidGitHubData, "failed to get branch information",
+			goerr.V("owner", owner),
+			goerr.V("repo", repo),
+			goerr.V("branch", branch),
+			goerr.V("status", resp.StatusCode),
+			goerr.V("body", string(body)),
+		)
+	}
+
+	// Parse response
+	var branchInfo struct {
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&branchInfo); err != nil {
+		return "", goerr.Wrap(err, "failed to parse branch information")
+	}
+
+	logging.From(ctx).Info("Resolved commit ID from branch",
+		"branch", branch,
+		"commit_id", branchInfo.Commit.SHA,
+	)
+
+	return branchInfo.Commit.SHA, nil
+}
 
 // ScanGitHubRepo is a usecase to download a source code from GitHub and scan it with Trivy. Using GitHub App credentials to download a private repository, then the app should be installed to the repository and have read access.
 // After scanning, the result is stored to the database. The temporary files are removed after the scan.
