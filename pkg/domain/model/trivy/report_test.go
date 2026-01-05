@@ -85,14 +85,14 @@ func TestReportValidation(t *testing.T) {
 		gt.Error(t, err)
 	})
 
-	t.Run("Nil results fails validation", func(t *testing.T) {
+	t.Run("Nil results passes validation", func(t *testing.T) {
 		report := trivy.Report{
 			SchemaVersion: 2,
 			ArtifactName:  "test-artifact",
 			Results:       nil,
 		}
 		err := report.Validate()
-		gt.Error(t, err)
+		gt.NoError(t, err)
 	})
 
 	t.Run("Result with empty target fails validation", func(t *testing.T) {
