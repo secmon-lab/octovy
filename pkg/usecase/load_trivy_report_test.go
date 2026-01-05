@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gt"
 	"github.com/m-mizutani/octovy/pkg/usecase"
 )
@@ -72,7 +73,9 @@ func TestLoadTrivyReport(t *testing.T) {
 		_, err := usecase.LoadTrivyReport(ctx, reader)
 
 		gt.Error(t, err)
-		gt.True(t, strings.Contains(err.Error(), "result target is empty"))
+		gt.S(t, err.Error()).Contains("result target is empty")
+		ge := goerr.Unwrap(err)
+		gt.V(t, ge.Values()["index"]).Equal(0)
 	})
 
 	t.Run("multiple results with one empty target", func(t *testing.T) {
@@ -95,7 +98,9 @@ func TestLoadTrivyReport(t *testing.T) {
 		_, err := usecase.LoadTrivyReport(ctx, reader)
 
 		gt.Error(t, err)
-		gt.True(t, strings.Contains(err.Error(), "result target is empty"))
+		gt.S(t, err.Error()).Contains("result target is empty")
+		ge := goerr.Unwrap(err)
+		gt.V(t, ge.Values()["index"]).Equal(1)
 	})
 }
 

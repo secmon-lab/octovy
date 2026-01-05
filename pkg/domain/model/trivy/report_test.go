@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gt"
 	"github.com/m-mizutani/octovy/pkg/domain/model/trivy"
 )
@@ -108,7 +108,9 @@ func TestReportValidation(t *testing.T) {
 		}
 		err := report.Validate()
 		gt.Error(t, err)
-		gt.True(t, strings.Contains(err.Error(), "result target is empty"))
+		gt.S(t, err.Error()).Contains("result target is empty")
+		ge := goerr.Unwrap(err)
+		gt.V(t, ge.Values()["index"]).Equal(0)
 	})
 
 	t.Run("Multiple results with one empty target fails validation", func(t *testing.T) {
@@ -128,7 +130,9 @@ func TestReportValidation(t *testing.T) {
 		}
 		err := report.Validate()
 		gt.Error(t, err)
-		gt.True(t, strings.Contains(err.Error(), "result target is empty"))
+		gt.S(t, err.Error()).Contains("result target is empty")
+		ge := goerr.Unwrap(err)
+		gt.V(t, ge.Values()["index"]).Equal(1)
 	})
 }
 
