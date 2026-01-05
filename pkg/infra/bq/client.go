@@ -138,8 +138,13 @@ func (x *Client) Insert(ctx context.Context, schema bigquery.Schema, data any, o
 			"error", err,
 		)
 
-		// Wait with exponential backoff
-		time.Sleep(backoff)
+		// Wait with exponential backoff, respecting context cancellation
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return goerr.Wrap(ctx.Err(), "context cancelled during backoff wait", goerr.V("last_error", lastErr))
+		}
+
 		backoff = time.Duration(float64(backoff) * backoffMultiplier)
 		if backoff > maxBackoff {
 			backoff = maxBackoff
