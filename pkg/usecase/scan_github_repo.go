@@ -81,7 +81,7 @@ func (x *UseCase) prepareScanInputFullSpec(ctx context.Context, input *model.Sca
 		GitHubMetadata: model.GitHubMetadata{
 			GitHubCommit: model.GitHubCommit{
 				GitHubRepo: model.GitHubRepo{
-					RepoID:   1, // Placeholder: RepoID validation requires non-zero but actual value not critical for scanning
+					RepoID:   0, // RepoID is optional for CLI-initiated scans
 					Owner:    input.Owner,
 					RepoName: input.Repo,
 				},
@@ -145,7 +145,7 @@ func (x *UseCase) prepareScanInputDBCompletion(ctx context.Context, input *model
 		GitHubMetadata: model.GitHubMetadata{
 			GitHubCommit: model.GitHubCommit{
 				GitHubRepo: model.GitHubRepo{
-					RepoID:   1, // Placeholder: RepoID validation requires non-zero but actual value not critical for scanning
+					RepoID:   0, // RepoID is optional for CLI-initiated scans
 					Owner:    input.Owner,
 					RepoName: input.Repo,
 				},
