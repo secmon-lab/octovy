@@ -24,9 +24,6 @@ func (x *Report) Validate() error {
 	if x.ArtifactName == "" {
 		return goerr.Wrap(types.ErrValidationFailed, "artifact name is empty")
 	}
-	if x.Results == nil {
-		return goerr.Wrap(types.ErrValidationFailed, "results is nil")
-	}
 	for i, result := range x.Results {
 		if result.Target == "" {
 			return goerr.Wrap(types.ErrValidationFailed, "result target is empty", goerr.V("index", i))
