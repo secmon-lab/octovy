@@ -16,4 +16,4 @@ octovy
 .vscode
 .cckiro
 .task
-
+.claude/settings.local.json
