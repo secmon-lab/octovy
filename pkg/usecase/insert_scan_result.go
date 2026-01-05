@@ -27,7 +27,7 @@ func (x *UseCase) InsertScanResult(ctx context.Context, meta model.GitHubMetadat
 
 	// Insert to BigQuery
 	if x.clients.BigQuery() != nil {
-		schema, err := createOrUpdateBigQueryTable(ctx, x.clients.BigQuery(), scan)
+		schema, schemaUpdated, err := createOrUpdateBigQueryTable(ctx, x.clients.BigQuery(), scan)
 		if err != nil {
 			return err
 		}
@@ -36,7 +36,10 @@ func (x *UseCase) InsertScanResult(ctx context.Context, meta model.GitHubMetadat
 			Scan:      *scan,
 			Timestamp: scan.Timestamp.UnixMicro(),
 		}
-		if err := x.clients.BigQuery().Insert(ctx, schema, rawRecord); err != nil {
+
+		// Set schemaUpdated flag in context for Insert method to determine if retry is needed
+		insertCtx := context.WithValue(ctx, "schema_updated", schemaUpdated)
+		if err := x.clients.BigQuery().Insert(insertCtx, schema, rawRecord); err != nil {
 			return goerr.Wrap(err, "failed to insert scan data to BigQuery")
 		}
 	}
@@ -51,41 +54,41 @@ func (x *UseCase) InsertScanResult(ctx context.Context, meta model.GitHubMetadat
 	return nil
 }
 
-func createOrUpdateBigQueryTable(ctx context.Context, bq interfaces.BigQuery, scan *model.Scan) (bigquery.Schema, error) {
-	schema, err := bqs.Infer(scan)
+func createOrUpdateBigQueryTable(ctx context.Context, bq interfaces.BigQuery, scan *model.Scan) (schema bigquery.Schema, schemaUpdated bool, err error) {
+	schema, err = bqs.Infer(scan)
 	if err != nil {
-		return nil, goerr.Wrap(err, "failed to infer scan schema")
+		return nil, false, goerr.Wrap(err, "failed to infer scan schema")
 	}
 
 	metaData, err := bq.GetMetadata(ctx)
 	if err != nil {
-		return nil, goerr.Wrap(err, "failed to create BigQuery table")
+		return nil, false, goerr.Wrap(err, "failed to create BigQuery table")
 	}
 	if metaData == nil {
 		if err := bq.CreateTable(ctx, &bigquery.TableMetadata{
 			Schema: schema,
 		}); err != nil {
-			return nil, goerr.Wrap(err, "failed to create BigQuery table")
+			return nil, false, goerr.Wrap(err, "failed to create BigQuery table")
 		}
 
-		return schema, nil
+		return schema, false, nil
 	}
 
 	if bqs.Equal(metaData.Schema, schema) {
-		return schema, nil
+		return schema, false, nil
 	}
 
 	mergedSchema, err := bqs.Merge(metaData.Schema, schema)
 	if err != nil {
-		return nil, goerr.Wrap(err, "failed to merge BigQuery schema")
+		return nil, false, goerr.Wrap(err, "failed to merge BigQuery schema")
 	}
 	if err := bq.UpdateTable(ctx, bigquery.TableMetadataToUpdate{
 		Schema: mergedSchema,
 	}, metaData.ETag); err != nil {
-		return nil, goerr.Wrap(err, "failed to update BigQuery table")
+		return nil, false, goerr.Wrap(err, "failed to update BigQuery table")
 	}
 
-	return mergedSchema, nil
+	return mergedSchema, true, nil
 }
 
 func (x *UseCase) insertToFirestore(ctx context.Context, meta model.GitHubMetadata, scan *model.Scan, report trivy.Report) error {

@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/m-mizutani/bqs"
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gt"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
@@ -17,6 +19,8 @@ import (
 	"github.com/m-mizutani/octovy/pkg/utils/testutil"
 	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestClient(t *testing.T) {
@@ -213,4 +217,99 @@ func TestSanitizeProtoJSON(t *testing.T) {
 	if _, ok := vs["ruby-advisory-db"]; ok {
 		t.Fatalf("unexpected original key remains: %+v", vs)
 	}
+}
+
+func TestIsSchemaNotFoundError(t *testing.T) {
+	t.Run("detects gRPC InvalidArgument with schema mismatch message", func(t *testing.T) {
+		err := status.Error(codes.InvalidArgument, "Input schema has more fields than BigQuery schema, extra fields: 'field1,field2'")
+		result := bq.IsSchemaNotFoundError(err)
+		gt.V(t, result).Equal(true)
+	})
+
+	t.Run("detects wrapped gRPC error with goerr", func(t *testing.T) {
+		baseErr := status.Error(codes.InvalidArgument, "Input schema has more fields than BigQuery schema, extra fields: 'field1'")
+		wrappedErr := goerr.Wrap(baseErr, "failed to insert")
+		result := bq.IsSchemaNotFoundError(wrappedErr)
+		gt.V(t, result).Equal(true)
+	})
+
+	t.Run("returns false for InvalidArgument with different message", func(t *testing.T) {
+		err := status.Error(codes.InvalidArgument, "Invalid request parameters")
+		result := bq.IsSchemaNotFoundError(err)
+		gt.V(t, result).Equal(false)
+	})
+
+	t.Run("returns false for different gRPC code", func(t *testing.T) {
+		err := status.Error(codes.PermissionDenied, "Input schema has more fields than BigQuery schema, extra fields: 'field1'")
+		result := bq.IsSchemaNotFoundError(err)
+		gt.V(t, result).Equal(false)
+	})
+
+	t.Run("returns false for non-gRPC error", func(t *testing.T) {
+		err := errors.New("some other error")
+		result := bq.IsSchemaNotFoundError(err)
+		gt.V(t, result).Equal(false)
+	})
+
+	t.Run("detects schema error in deeply nested goerr wrapping", func(t *testing.T) {
+		baseErr := status.Error(codes.InvalidArgument, "Input schema has more fields than BigQuery schema, extra fields: 'a,b,c'")
+		wrapped1 := goerr.Wrap(baseErr, "level 1")
+		wrapped2 := goerr.Wrap(wrapped1, "level 2")
+		wrapped3 := goerr.Wrap(wrapped2, "level 3")
+		result := bq.IsSchemaNotFoundError(wrapped3)
+		gt.V(t, result).Equal(true)
+	})
+}
+
+func TestSchemaUpdateAndRetry(t *testing.T) {
+	projectID := testutil.GetEnvOrSkip(t, "TEST_BIGQUERY_PROJECT_ID")
+	datasetID := testutil.GetEnvOrSkip(t, "TEST_BIGQUERY_DATASET_ID")
+
+	ctx := context.Background()
+	tblName := types.BQTableID(time.Now().Format("schema_retry_test_20060102_150405"))
+	client, err := bq.New(ctx, types.GoogleProjectID(projectID), types.BQDatasetID(datasetID), tblName)
+	gt.NoError(t, err)
+
+	t.Run("schema update and insert with retry", func(t *testing.T) {
+		// Step 1: Create table with initial schema
+		initialSchema := bigquery.Schema{
+			{Name: "id", Type: bigquery.StringFieldType},
+			{Name: "value", Type: bigquery.IntegerFieldType},
+		}
+		gt.NoError(t, client.CreateTable(ctx, &bigquery.TableMetadata{
+			Name:   tblName.String(),
+			Schema: initialSchema,
+		}))
+
+		// Step 2: Update schema to add new field
+		md := gt.R1(client.GetMetadata(ctx)).NoError(t)
+		gt.V(t, md).NotEqual(nil)
+
+		updatedSchema := bigquery.Schema{
+			{Name: "id", Type: bigquery.StringFieldType},
+			{Name: "value", Type: bigquery.IntegerFieldType},
+			{Name: "new_field", Type: bigquery.StringFieldType},
+		}
+		gt.NoError(t, client.UpdateTable(ctx, bigquery.TableMetadataToUpdate{
+			Schema: updatedSchema,
+		}, md.ETag))
+
+		// Step 3: Insert data with schemaUpdated=true in context
+		data := struct {
+			ID       string `json:"id"`
+			Value    int    `json:"value"`
+			NewField string `json:"new_field"`
+		}{
+			ID:       "test-1",
+			Value:    42,
+			NewField: "test value",
+		}
+
+		// Set schemaUpdated flag in context to enable retry logic
+		insertCtx := context.WithValue(ctx, "schema_updated", true)
+		err = client.Insert(insertCtx, updatedSchema, data)
+
+		// The insert should succeed (either immediately or after retry)
+		gt.NoError(t, err)
+	})
 }

@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/bigquery/storage/managedwriter"
@@ -13,13 +15,27 @@ import (
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
+	"github.com/m-mizutani/octovy/pkg/utils/logging"
 	"github.com/m-mizutani/octovy/pkg/utils/safe"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
+)
+
+type contextKey string
+
+const schemaUpdatedKey contextKey = "schema_updated"
+
+const (
+	maxRetries        = 10
+	initialBackoff    = 5 * time.Second
+	maxBackoff        = 60 * time.Second
+	backoffMultiplier = 1.5
 )
 
 type Client struct {
@@ -75,6 +91,64 @@ func (x *Client) GetMetadata(ctx context.Context) (*bigquery.TableMetadata, erro
 
 // Insert implements interfaces.BigQuery.
 func (x *Client) Insert(ctx context.Context, schema bigquery.Schema, data any) error {
+	schemaUpdated, _ := ctx.Value(schemaUpdatedKey).(bool)
+	logger := logging.From(ctx)
+
+	var lastErr error
+	backoff := initialBackoff
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		err := x.attemptInsert(ctx, schema, data)
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
+
+		// Check if this is a schema mismatch error
+		if !isSchemaNotFoundError(err) {
+			// Not a schema error, return immediately
+			return err
+		}
+
+		// If schema was not updated, don't retry (this should not happen normally)
+		if !schemaUpdated {
+			logger.Warn("Schema mismatch error occurred but schema was not updated, not retrying",
+				"error", err,
+			)
+			return err
+		}
+
+		// If we've exhausted retries, return the error
+		if attempt >= maxRetries {
+			logger.Error("Maximum retry attempts reached for schema mismatch error",
+				"attempts", attempt+1,
+				"error", err,
+			)
+			return goerr.Wrap(err, "failed to insert after retries",
+				goerr.V("attempts", attempt+1),
+			)
+		}
+
+		// Log retry attempt
+		logger.Warn("Schema mismatch error detected, retrying after backoff",
+			"attempt", attempt+1,
+			"backoff", backoff,
+			"error", err,
+		)
+
+		// Wait with exponential backoff
+		time.Sleep(backoff)
+		backoff = time.Duration(float64(backoff) * backoffMultiplier)
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+	}
+
+	return lastErr
+}
+
+func (x *Client) attemptInsert(ctx context.Context, schema bigquery.Schema, data any) error {
 	convertedSchema, err := adapt.BQSchemaToStorageTableSchema(schema)
 	if err != nil {
 		return goerr.Wrap(err, "failed to convert schema")
@@ -196,4 +270,32 @@ func (x *Client) UpdateTable(ctx context.Context, md bigquery.TableMetadataToUpd
 	}
 
 	return nil
+}
+
+// isSchemaNotFoundError checks if the error is a schema mismatch error from BigQuery Storage Write API.
+func isSchemaNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Try to get gRPC status from the error
+	st, ok := status.FromError(err)
+	if ok && st.Code() == codes.InvalidArgument {
+		msg := st.Message()
+		if strings.HasPrefix(msg, "Input schema has more fields than BigQuery schema, extra fields:") {
+			return true
+		}
+	}
+
+	// Try unwrapping with goerr first
+	if unwrapped := goerr.Unwrap(err); unwrapped != nil && unwrapped != err {
+		return isSchemaNotFoundError(unwrapped)
+	}
+
+	// Try standard errors.Unwrap as fallback
+	if unwrapped := errors.Unwrap(err); unwrapped != nil {
+		return isSchemaNotFoundError(unwrapped)
+	}
+
+	return false
 }
