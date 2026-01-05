@@ -27,6 +27,7 @@ import (
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"github.com/m-mizutani/octovy/pkg/infra"
 	"github.com/m-mizutani/octovy/pkg/infra/ghapp"
+	"github.com/m-mizutani/octovy/pkg/repository/memory"
 	"github.com/m-mizutani/octovy/pkg/usecase"
 	"github.com/m-mizutani/octovy/pkg/utils/testutil"
 )
@@ -914,48 +915,32 @@ func TestScanGitHubRepoRemote(t *testing.T) {
 		fx := newScanTestFixture(t, nil)
 		ctx := context.Background()
 
-		mockRepo := &mock.ScanRepositoryMock{}
-		mockRepo.GetRepositoryFunc = func(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error) {
-			gt.V(t, repoID).Equal(types.GitHubRepoID("test-owner/test-repo"))
-			return &model.Repository{
-				ID:             repoID,
-				Owner:          "test-owner",
-				Name:           "test-repo",
-				DefaultBranch:  "main",
-				InstallationID: 67890,
-			}, nil
-		}
-		mockRepo.GetBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName) (*model.Branch, error) {
-			gt.V(t, repoID).Equal(types.GitHubRepoID("test-owner/test-repo"))
-			gt.V(t, branchName).Equal(types.BranchName("main"))
-			return &model.Branch{
-				Name:          "main",
-				LastCommitSHA: "abcdef1234567890123456789012345678901234",
-			}, nil
-		}
-		mockRepo.CreateOrUpdateRepositoryFunc = func(ctx context.Context, repo *model.Repository) error {
-			return nil
-		}
-		mockRepo.CreateOrUpdateBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branch *model.Branch) error {
-			return nil
-		}
-		mockRepo.CreateOrUpdateTargetFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, target *model.Target) error {
-			return nil
-		}
-		mockRepo.ListVulnerabilitiesFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, targetID types.TargetID) ([]*model.Vulnerability, error) {
-			return nil, nil
-		}
-		mockRepo.BatchCreateVulnerabilitiesFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, targetID types.TargetID, vulns []*model.Vulnerability) error {
-			return nil
-		}
+		// Use memory repository instead of mock
+		memRepo := memory.New()
 
-		// Create usecase with Firestore repository
+		// Prepare test data in memory repository
+		testRepo := &model.Repository{
+			ID:             "test-owner/test-repo",
+			Owner:          "test-owner",
+			Name:           "test-repo",
+			DefaultBranch:  "main",
+			InstallationID: 67890,
+		}
+		gt.NoError(t, memRepo.CreateOrUpdateRepository(ctx, testRepo))
+
+		testBranch := &model.Branch{
+			Name:          "main",
+			LastCommitSHA: "abcdef1234567890123456789012345678901234",
+		}
+		gt.NoError(t, memRepo.CreateOrUpdateBranch(ctx, testRepo.ID, testBranch))
+
+		// Create usecase with memory repository
 		clients := infra.New(
 			infra.WithGitHubApp(fx.mockGH),
 			infra.WithHTTPClient(fx.mockHTTP),
 			infra.WithTrivy(fx.mockTrivy),
 			infra.WithBigQuery(fx.mockBQ),
-			infra.WithScanRepository(mockRepo),
+			infra.WithScanRepository(memRepo),
 		)
 		uc := usecase.New(clients)
 
@@ -980,45 +965,31 @@ func TestScanGitHubRepoRemote(t *testing.T) {
 		fx := newScanTestFixture(t, nil)
 		ctx := context.Background()
 
-		mockRepo := &mock.ScanRepositoryMock{}
-		mockRepo.GetRepositoryFunc = func(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error) {
-			return &model.Repository{
-				ID:             repoID,
-				Owner:          "test-owner",
-				Name:           "test-repo",
-				DefaultBranch:  "main",
-				InstallationID: 67890,
-			}, nil
+		// Use memory repository instead of mock
+		memRepo := memory.New()
+
+		// Prepare test data in memory repository
+		testRepo := &model.Repository{
+			ID:             "test-owner/test-repo",
+			Owner:          "test-owner",
+			Name:           "test-repo",
+			DefaultBranch:  "main",
+			InstallationID: 67890,
 		}
-		mockRepo.GetBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName) (*model.Branch, error) {
-			gt.V(t, branchName).Equal(types.BranchName("feature-branch"))
-			return &model.Branch{
-				Name:          "feature-branch",
-				LastCommitSHA: "fedcba0987654321098765432109876543210987",
-			}, nil
+		gt.NoError(t, memRepo.CreateOrUpdateRepository(ctx, testRepo))
+
+		testBranch := &model.Branch{
+			Name:          "feature-branch",
+			LastCommitSHA: "fedcba0987654321098765432109876543210987",
 		}
-		mockRepo.CreateOrUpdateRepositoryFunc = func(ctx context.Context, repo *model.Repository) error {
-			return nil
-		}
-		mockRepo.CreateOrUpdateBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branch *model.Branch) error {
-			return nil
-		}
-		mockRepo.CreateOrUpdateTargetFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, target *model.Target) error {
-			return nil
-		}
-		mockRepo.ListVulnerabilitiesFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, targetID types.TargetID) ([]*model.Vulnerability, error) {
-			return nil, nil
-		}
-		mockRepo.BatchCreateVulnerabilitiesFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName, targetID types.TargetID, vulns []*model.Vulnerability) error {
-			return nil
-		}
+		gt.NoError(t, memRepo.CreateOrUpdateBranch(ctx, testRepo.ID, testBranch))
 
 		clients := infra.New(
 			infra.WithGitHubApp(fx.mockGH),
 			infra.WithHTTPClient(fx.mockHTTP),
 			infra.WithTrivy(fx.mockTrivy),
 			infra.WithBigQuery(fx.mockBQ),
-			infra.WithScanRepository(mockRepo),
+			infra.WithScanRepository(memRepo),
 		)
 		uc := usecase.New(clients)
 
@@ -1042,13 +1013,11 @@ func TestScanGitHubRepoRemote(t *testing.T) {
 	t.Run("DB completion mode repository not found", func(t *testing.T) {
 		ctx := context.Background()
 
-		mockRepo := &mock.ScanRepositoryMock{}
-		mockRepo.GetRepositoryFunc = func(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error) {
-			return nil, errors.New("repository not found")
-		}
+		// Use empty memory repository - no data prepared
+		memRepo := memory.New()
 
 		clients := infra.New(
-			infra.WithScanRepository(mockRepo),
+			infra.WithScanRepository(memRepo),
 		)
 		uc := usecase.New(clients)
 
@@ -1059,28 +1028,27 @@ func TestScanGitHubRepoRemote(t *testing.T) {
 
 		err := uc.ScanGitHubRepoRemote(ctx, input)
 		gt.Error(t, err)
-		gt.True(t, strings.Contains(err.Error(), "repository not found"))
+		gt.True(t, strings.Contains(err.Error(), "not found"))
 	})
 
 	t.Run("DB completion mode branch not found", func(t *testing.T) {
 		ctx := context.Background()
 
-		mockRepo := &mock.ScanRepositoryMock{}
-		mockRepo.GetRepositoryFunc = func(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error) {
-			return &model.Repository{
-				ID:             repoID,
-				Owner:          "test-owner",
-				Name:           "test-repo",
-				DefaultBranch:  "main",
-				InstallationID: 67890,
-			}, nil
+		// Use memory repository with repository data but no branch data
+		memRepo := memory.New()
+
+		testRepo := &model.Repository{
+			ID:             "test-owner/test-repo",
+			Owner:          "test-owner",
+			Name:           "test-repo",
+			DefaultBranch:  "main",
+			InstallationID: 67890,
 		}
-		mockRepo.GetBranchFunc = func(ctx context.Context, repoID types.GitHubRepoID, branchName types.BranchName) (*model.Branch, error) {
-			return nil, errors.New("branch not found")
-		}
+		gt.NoError(t, memRepo.CreateOrUpdateRepository(ctx, testRepo))
+		// Note: No branch is created, so GetBranch will fail
 
 		clients := infra.New(
-			infra.WithScanRepository(mockRepo),
+			infra.WithScanRepository(memRepo),
 		)
 		uc := usecase.New(clients)
 
