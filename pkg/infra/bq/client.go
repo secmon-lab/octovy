@@ -27,10 +27,6 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
-type contextKey string
-
-const schemaUpdatedKey contextKey = "schema_updated"
-
 const (
 	maxRetries        = 10
 	initialBackoff    = 5 * time.Second
@@ -90,8 +86,13 @@ func (x *Client) GetMetadata(ctx context.Context) (*bigquery.TableMetadata, erro
 }
 
 // Insert implements interfaces.BigQuery.
-func (x *Client) Insert(ctx context.Context, schema bigquery.Schema, data any) error {
-	schemaUpdated, _ := ctx.Value(schemaUpdatedKey).(bool)
+func (x *Client) Insert(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
+	cfg := &interfaces.BigQueryInsertConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	enableRetry := cfg.EnableRetry
 	logger := logging.From(ctx)
 
 	var lastErr error
@@ -111,9 +112,9 @@ func (x *Client) Insert(ctx context.Context, schema bigquery.Schema, data any) e
 			return err
 		}
 
-		// If schema was not updated, don't retry (this should not happen normally)
-		if !schemaUpdated {
-			logger.Warn("Schema mismatch error occurred but schema was not updated, not retrying",
+		// If retry is not enabled, don't retry
+		if !enableRetry {
+			logger.Warn("Schema mismatch error occurred but retry is not enabled",
 				"error", err,
 			)
 			return err

@@ -6,6 +6,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/m-mizutani/gt"
+	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/mock"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/model/trivy"
@@ -27,7 +28,7 @@ func TestInsertScanResult(t *testing.T) {
 		ctx := context.Background()
 
 		var bqInsertCalled bool
-		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 			bqInsertCalled = true
 			return nil
 		}
@@ -111,7 +112,7 @@ func TestInsertScanResult(t *testing.T) {
 		ctx := context.Background()
 
 		var insertCalled bool
-		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 			insertCalled = true
 			return nil
 		}
@@ -166,7 +167,7 @@ func TestInsertScanResult(t *testing.T) {
 			return nil, nil // No existing table
 		}
 
-		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 			return nil
 		}
 
@@ -197,7 +198,7 @@ func TestInsertScanResult(t *testing.T) {
 		ctx := context.Background()
 
 		var insertedData any
-		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 			insertedData = data
 			return nil
 		}
@@ -263,7 +264,7 @@ func TestInsertScanResult(t *testing.T) {
 
 		ctx := context.Background()
 
-		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any) error {
+		mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
 			return nil
 		}
 		mockBQ.GetMetadataFunc = func(ctx context.Context) (*bigquery.TableMetadata, error) {

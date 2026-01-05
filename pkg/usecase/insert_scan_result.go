@@ -37,9 +37,7 @@ func (x *UseCase) InsertScanResult(ctx context.Context, meta model.GitHubMetadat
 			Timestamp: scan.Timestamp.UnixMicro(),
 		}
 
-		// Set schemaUpdated flag in context for Insert method to determine if retry is needed
-		insertCtx := context.WithValue(ctx, "schema_updated", schemaUpdated)
-		if err := x.clients.BigQuery().Insert(insertCtx, schema, rawRecord); err != nil {
+		if err := x.clients.BigQuery().Insert(ctx, schema, rawRecord, interfaces.WithRetry(schemaUpdated)); err != nil {
 			return goerr.Wrap(err, "failed to insert scan data to BigQuery")
 		}
 	}

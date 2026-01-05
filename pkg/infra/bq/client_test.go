@@ -13,6 +13,7 @@ import (
 	"github.com/m-mizutani/bqs"
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gt"
+	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"github.com/m-mizutani/octovy/pkg/infra/bq"
@@ -305,9 +306,8 @@ func TestSchemaUpdateAndRetry(t *testing.T) {
 			NewField: "test value",
 		}
 
-		// Set schemaUpdated flag in context to enable retry logic
-		insertCtx := context.WithValue(ctx, "schema_updated", true)
-		err = client.Insert(insertCtx, updatedSchema, data)
+		// Insert with retry option to enable retry logic
+		err = client.Insert(ctx, updatedSchema, data, interfaces.WithRetry(true))
 
 		// The insert should succeed (either immediately or after retry)
 		gt.NoError(t, err)
