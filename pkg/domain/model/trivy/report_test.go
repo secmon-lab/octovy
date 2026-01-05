@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gt"
 	"github.com/m-mizutani/octovy/pkg/domain/model/trivy"
 )
@@ -92,6 +93,46 @@ func TestReportValidation(t *testing.T) {
 		}
 		err := report.Validate()
 		gt.Error(t, err)
+	})
+
+	t.Run("Result with empty target fails validation", func(t *testing.T) {
+		report := trivy.Report{
+			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
+			Results: trivy.Results{
+				{
+					Target: "",
+					Type:   "gomod",
+				},
+			},
+		}
+		err := report.Validate()
+		gt.Error(t, err)
+		gt.S(t, err.Error()).Contains("result target is empty")
+		ge := goerr.Unwrap(err)
+		gt.V(t, ge.Values()["index"]).Equal(0)
+	})
+
+	t.Run("Multiple results with one empty target fails validation", func(t *testing.T) {
+		report := trivy.Report{
+			SchemaVersion: 2,
+			ArtifactName:  "test-artifact",
+			Results: trivy.Results{
+				{
+					Target: "go.mod",
+					Type:   "gomod",
+				},
+				{
+					Target: "",
+					Type:   "npm",
+				},
+			},
+		}
+		err := report.Validate()
+		gt.Error(t, err)
+		gt.S(t, err.Error()).Contains("result target is empty")
+		ge := goerr.Unwrap(err)
+		gt.V(t, ge.Values()["index"]).Equal(1)
 	})
 }
 

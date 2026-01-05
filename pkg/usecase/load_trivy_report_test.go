@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/gt"
 	"github.com/m-mizutani/octovy/pkg/usecase"
 )
@@ -54,6 +55,52 @@ func TestLoadTrivyReport(t *testing.T) {
 		_, err := usecase.LoadTrivyReport(ctx, reader)
 
 		gt.Error(t, err)
+	})
+
+	t.Run("result with empty target", func(t *testing.T) {
+		emptyTargetJSON := `{
+  "SchemaVersion": 2,
+  "ArtifactName": ".",
+  "ArtifactType": "filesystem",
+  "Results": [
+    {
+      "Target": "",
+      "Type": "gomod"
+    }
+  ]
+}`
+		reader := strings.NewReader(emptyTargetJSON)
+		_, err := usecase.LoadTrivyReport(ctx, reader)
+
+		gt.Error(t, err)
+		gt.S(t, err.Error()).Contains("result target is empty")
+		ge := goerr.Unwrap(err)
+		gt.V(t, ge.Values()["index"]).Equal(0)
+	})
+
+	t.Run("multiple results with one empty target", func(t *testing.T) {
+		mixedJSON := `{
+  "SchemaVersion": 2,
+  "ArtifactName": ".",
+  "ArtifactType": "filesystem",
+  "Results": [
+    {
+      "Target": "go.mod",
+      "Type": "gomod"
+    },
+    {
+      "Target": "",
+      "Type": "npm"
+    }
+  ]
+}`
+		reader := strings.NewReader(mixedJSON)
+		_, err := usecase.LoadTrivyReport(ctx, reader)
+
+		gt.Error(t, err)
+		gt.S(t, err.Error()).Contains("result target is empty")
+		ge := goerr.Unwrap(err)
+		gt.V(t, ge.Values()["index"]).Equal(1)
 	})
 }
 

@@ -27,6 +27,11 @@ func (x *Report) Validate() error {
 	if x.Results == nil {
 		return goerr.Wrap(types.ErrValidationFailed, "results is nil")
 	}
+	for i, result := range x.Results {
+		if result.Target == "" {
+			return goerr.Wrap(types.ErrValidationFailed, "result target is empty", goerr.V("index", i))
+		}
+	}
 	return nil
 }
 
@@ -86,20 +91,20 @@ type Layer struct {
 }
 
 type Package struct {
-	ID         string   `json:",omitempty"`
-	Name       string   `json:",omitempty"`
+	ID         string             `json:",omitempty"`
+	Name       string             `json:",omitempty"`
 	Identifier *PackageIdentifier `json:",omitempty"`
-	Version    string   `json:",omitempty"`
-	Release    string   `json:",omitempty"`
-	Epoch      int      `json:",omitempty"`
-	Arch       string   `json:",omitempty"`
-	Dev        bool     `json:",omitempty"`
-	SrcName    string   `json:",omitempty"`
-	SrcVersion string   `json:",omitempty"`
-	SrcRelease string   `json:",omitempty"`
-	SrcEpoch   int      `json:",omitempty"`
-	Licenses   []string `json:",omitempty"`
-	Maintainer string   `json:",omitempty"`
+	Version    string             `json:",omitempty"`
+	Release    string             `json:",omitempty"`
+	Epoch      int                `json:",omitempty"`
+	Arch       string             `json:",omitempty"`
+	Dev        bool               `json:",omitempty"`
+	SrcName    string             `json:",omitempty"`
+	SrcVersion string             `json:",omitempty"`
+	SrcRelease string             `json:",omitempty"`
+	SrcEpoch   int                `json:",omitempty"`
+	Licenses   []string           `json:",omitempty"`
+	Maintainer string             `json:",omitempty"`
 
 	Modularitylabel string     `json:",omitempty"` // only for Red Hat based distributions
 	BuildInfo       *BuildInfo `json:",omitempty"` // only for Red Hat
