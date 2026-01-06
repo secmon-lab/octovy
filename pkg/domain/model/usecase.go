@@ -34,3 +34,7 @@ type ScanGitHubRepoRemoteInput struct {
 	Branch    string
 	InstallID types.GitHubAppInstallID
 }
+
+type ScanGitHubReposByOwnerInput struct {
+	Owner string
+}
