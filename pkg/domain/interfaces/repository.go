@@ -15,6 +15,7 @@ type ScanRepository interface {
 	CreateOrUpdateRepository(ctx context.Context, repo *model.Repository) error
 	GetRepository(ctx context.Context, repoID types.GitHubRepoID) (*model.Repository, error)
 	ListRepositories(ctx context.Context, installationID int64) ([]*model.Repository, error)
+	ListRepositoriesByOwner(ctx context.Context, owner string) ([]*model.Repository, error)
 
 	// Branch operations
 	CreateOrUpdateBranch(ctx context.Context, repoID types.GitHubRepoID, branch *model.Branch) error

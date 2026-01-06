@@ -116,10 +116,9 @@ func scanRemoteCommand() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:        "github-repo",
-				Usage:       "GitHub repository name (required)",
+				Usage:       "GitHub repository name (optional; if not specified, scans all repositories for the owner)",
 				Sources:     cli.EnvVars("OCTOVY_GITHUB_REPO"),
 				Destination: &repo,
-				Required:    true,
 			},
 			&cli.StringFlag{
 				Name:        "github-commit",
@@ -212,6 +211,19 @@ func runScanRemote(ctx context.Context, params *scanRemoteParams) error {
 
 	// Execute scan using usecase
 	uc := usecase.New(clients)
+
+	// Check if this is owner-only mode (repo not specified)
+	if params.repo == "" {
+		ownerInput := &model.ScanGitHubReposByOwnerInput{
+			Owner: params.owner,
+		}
+		if err := uc.ScanGitHubReposByOwner(ctx, ownerInput); err != nil {
+			return goerr.Wrap(err, "failed to scan repositories by owner")
+		}
+		return nil
+	}
+
+	// Single repository mode
 	input := &model.ScanGitHubRepoRemoteInput{
 		Owner:     params.owner,
 		Repo:      params.repo,

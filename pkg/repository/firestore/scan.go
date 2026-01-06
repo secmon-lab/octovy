@@ -142,6 +142,35 @@ func (r *scanRepository) ListRepositories(ctx context.Context, installationID in
 	return repos, nil
 }
 
+func (r *scanRepository) ListRepositoriesByOwner(ctx context.Context, owner string) ([]*model.Repository, error) {
+	query := r.client.Collection(collectionRepo).Where("Owner", "==", owner)
+
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	var repos []*model.Repository
+	for {
+		snap, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, goerr.Wrap(err, "failed to iterate repositories",
+				goerr.V("owner", owner),
+			)
+		}
+
+		var repo model.Repository
+		if err := snap.DataTo(&repo); err != nil {
+			return nil, goerr.Wrap(err, "failed to decode repository")
+		}
+
+		repos = append(repos, &repo)
+	}
+
+	return repos, nil
+}
+
 // Branch operations
 
 func (r *scanRepository) CreateOrUpdateBranch(ctx context.Context, repoID types.GitHubRepoID, branch *model.Branch) error {

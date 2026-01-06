@@ -77,6 +77,20 @@ func (r *scanRepository) ListRepositories(ctx context.Context, installationID in
 	return repos, nil
 }
 
+func (r *scanRepository) ListRepositoriesByOwner(ctx context.Context, owner string) ([]*model.Repository, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var repos []*model.Repository
+	for _, data := range r.repos {
+		if data.repo.Owner == owner {
+			repos = append(repos, copyRepository(data.repo))
+		}
+	}
+
+	return repos, nil
+}
+
 // Branch operations
 
 func (r *scanRepository) CreateOrUpdateBranch(ctx context.Context, repoID types.GitHubRepoID, branch *model.Branch) error {

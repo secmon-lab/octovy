@@ -21,6 +21,9 @@ func TestAll(t *testing.T, repo interfaces.ScanRepository) {
 	t.Run("RepositoryCRUD", func(t *testing.T) {
 		TestRepositoryCRUD(t, repo)
 	})
+	t.Run("ListRepositoriesByOwner", func(t *testing.T) {
+		TestListRepositoriesByOwner(t, repo)
+	})
 	t.Run("BranchCRUD", func(t *testing.T) {
 		TestBranchCRUD(t, repo)
 	})
@@ -94,6 +97,93 @@ func TestRepositoryCRUD(t *testing.T, repo interfaces.ScanRepository) {
 	_, err = repo.GetRepository(ctx, nonExistentID)
 	gt.Error(t, err)
 	gt.True(t, errors.Is(err, repository.ErrNotFound))
+}
+
+// TestListRepositoriesByOwner tests listing repositories by owner
+func TestListRepositoriesByOwner(t *testing.T, repo interfaces.ScanRepository) {
+	ctx := context.Background()
+
+	// Generate unique owner for this test
+	owner := fmt.Sprintf("owner-%s", uuid.New().String()[:8])
+
+	// Create multiple repositories for the same owner
+	repos := []*model.Repository{
+		{
+			ID:             types.GitHubRepoID(fmt.Sprintf("%s/repo1", owner)),
+			Owner:          owner,
+			Name:           "repo1",
+			DefaultBranch:  "main",
+			InstallationID: 12345,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+		},
+		{
+			ID:             types.GitHubRepoID(fmt.Sprintf("%s/repo2", owner)),
+			Owner:          owner,
+			Name:           "repo2",
+			DefaultBranch:  "develop",
+			InstallationID: 12345,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+		},
+		{
+			ID:             types.GitHubRepoID(fmt.Sprintf("%s/repo3", owner)),
+			Owner:          owner,
+			Name:           "repo3",
+			DefaultBranch:  "",
+			InstallationID: 12345,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+		},
+	}
+
+	// Create repositories
+	for _, r := range repos {
+		err := repo.CreateOrUpdateRepository(ctx, r)
+		gt.NoError(t, err)
+	}
+
+	// Create a repository with different owner (should not be included)
+	otherOwner := fmt.Sprintf("other-%s", uuid.New().String()[:8])
+	otherRepo := &model.Repository{
+		ID:             types.GitHubRepoID(fmt.Sprintf("%s/repo4", otherOwner)),
+		Owner:          otherOwner,
+		Name:           "repo4",
+		DefaultBranch:  "main",
+		InstallationID: 67890,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+	err := repo.CreateOrUpdateRepository(ctx, otherRepo)
+	gt.NoError(t, err)
+
+	// List repositories by owner
+	retrieved, err := repo.ListRepositoriesByOwner(ctx, owner)
+	gt.NoError(t, err)
+	gt.V(t, len(retrieved)).Equal(3)
+
+	// Verify all repositories have the correct owner
+	repoMap := make(map[string]*model.Repository)
+	for _, r := range retrieved {
+		gt.V(t, r.Owner).Equal(owner)
+		repoMap[r.Name] = r
+	}
+
+	// Verify all repositories are returned
+	gt.V(t, repoMap["repo1"]).NotEqual(nil)
+	gt.V(t, repoMap["repo2"]).NotEqual(nil)
+	gt.V(t, repoMap["repo3"]).NotEqual(nil)
+
+	// Verify repository details
+	gt.V(t, repoMap["repo1"].DefaultBranch).Equal(types.BranchName("main"))
+	gt.V(t, repoMap["repo2"].DefaultBranch).Equal(types.BranchName("develop"))
+	gt.V(t, repoMap["repo3"].DefaultBranch).Equal(types.BranchName(""))
+
+	// Test with non-existent owner
+	nonExistentOwner := fmt.Sprintf("nonexistent-%s", uuid.New().String()[:8])
+	emptyRepos, err := repo.ListRepositoriesByOwner(ctx, nonExistentOwner)
+	gt.NoError(t, err)
+	gt.V(t, len(emptyRepos)).Equal(0)
 }
 
 // TestBranchCRUD tests basic CRUD operations for Branch
