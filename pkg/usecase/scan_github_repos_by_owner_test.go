@@ -2,10 +2,17 @@ package usecase_test
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/m-mizutani/gt"
+	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
+	"github.com/m-mizutani/octovy/pkg/domain/mock"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"github.com/m-mizutani/octovy/pkg/infra"
@@ -48,7 +55,7 @@ func TestScanGitHubReposByOwner_NoRepositories(t *testing.T) {
 func TestScanGitHubReposByOwner_FilterRepositories(t *testing.T) {
 	ctx := context.Background()
 
-	// Create test repositories
+	// Create test repositories in memory
 	repo := memory.New()
 	now := time.Now()
 
@@ -105,30 +112,86 @@ func TestScanGitHubReposByOwner_FilterRepositories(t *testing.T) {
 		Name:          "main",
 		LastScanID:    "scan-123",
 		LastScanAt:    now,
-		LastCommitSHA: "abc123def456",
+		LastCommitSHA: "abc123def456789012345678901234567890abcd",
 		Status:        types.ScanStatusSuccess,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
 	gt.NoError(t, repo.CreateOrUpdateBranch(ctx, validRepo.ID, branch))
 
-	// Test that ListRepositoriesByOwner correctly filters by owner
-	repos, err := repo.ListRepositoriesByOwner(ctx, "test-owner")
-	gt.NoError(t, err)
-	gt.V(t, len(repos)).Equal(3) // Should return 3 repos for "test-owner"
+	// Setup mocks to track which repositories are scanned
+	mockGH := &mock.GitHubAppMock{}
+	mockHTTP := &httpMock{}
+	mockTrivy := &trivyMock{}
+	mockBQ := &mock.BigQueryMock{}
 
-	// Verify filtering logic: count repos with both DefaultBranch and InstallationID
-	var validCount int
-	for _, r := range repos {
-		if r.DefaultBranch != "" && r.InstallationID != 0 {
-			validCount++
-		}
+	var scannedRepos []string
+
+	mockGH.GetArchiveURLFunc = func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
+		// Track which repo was scanned (this is what we're testing)
+		scannedRepos = append(scannedRepos, input.Repo)
+		// Return error to stop early without actually downloading/scanning
+		return nil, io.EOF
 	}
-	gt.V(t, validCount).Equal(1) // Only validRepo should pass the filter
 
-	// Verify "other-owner" repo is not included
-	otherRepos, err := repo.ListRepositoriesByOwner(ctx, "other-owner")
-	gt.NoError(t, err)
-	gt.V(t, len(otherRepos)).Equal(1)
-	gt.V(t, otherRepos[0].Name).Equal("repo")
+	mockGH.HTTPClientFunc = func(installID types.GitHubAppInstallID) (*http.Client, error) {
+		return &http.Client{Transport: &mockTransport{mockHTTP: mockHTTP}}, nil
+	}
+
+	mockHTTP.mockDo = func(req *http.Request) (*http.Response, error) {
+		// Mock GitHub API branch endpoint for resolving branch to commit
+		if strings.Contains(req.URL.Path, "/branches/") {
+			branchResponse := `{"commit":{"sha":"abc123def456789012345678901234567890abcd"}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(branchResponse)),
+			}, nil
+		}
+		// Mock archive download
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(&emptyZipReader{}),
+		}, nil
+	}
+
+	mockTrivy.mockRun = func(ctx context.Context, args []string) error {
+		return nil
+	}
+
+	mockBQ.InsertFunc = func(ctx context.Context, schema bigquery.Schema, data any, opts ...interfaces.BigQueryInsertOption) error {
+		return nil
+	}
+
+	// Create usecase with mocks
+	clients := infra.New(
+		infra.WithScanRepository(repo),
+		infra.WithGitHubApp(mockGH),
+		infra.WithHTTPClient(mockHTTP),
+		infra.WithTrivy(mockTrivy),
+		infra.WithBigQuery(mockBQ),
+	)
+	uc := usecase.New(clients)
+
+	input := &model.ScanGitHubReposByOwnerInput{
+		Owner: "test-owner",
+	}
+
+	// Execute the usecase (will fail due to mockGH.GetArchiveURLFunc returning error, but that's fine)
+	err := uc.ScanGitHubReposByOwner(ctx, input)
+	gt.Error(t, err) // Expected to fail, but we can verify filtering worked
+
+	// Verify only valid-repo was attempted to be scanned
+	// This proves the filtering logic worked correctly:
+	// - Only repos with DefaultBranch and InstallationID were processed
+	// - Repos without DefaultBranch or InstallationID were skipped
+	// - Repos with different owner were not retrieved
+	gt.V(t, len(scannedRepos)).Equal(1)
+	gt.V(t, scannedRepos[0]).Equal("valid-repo")
+}
+
+// emptyZipReader returns empty data to avoid actual zip extraction
+type emptyZipReader struct{}
+
+func (r *emptyZipReader) Read(p []byte) (int, error) {
+	return 0, io.EOF
 }

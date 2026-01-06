@@ -78,11 +78,12 @@ func (x *UseCase) ScanGitHubReposByOwner(ctx context.Context, input *model.ScanG
 		)
 
 		// Prepare scan input for this repository
+		// Use full specification mode with InstallID from repo to avoid redundant DB query
 		scanInput := &model.ScanGitHubRepoRemoteInput{
 			Owner:     repo.Owner,
 			Repo:      repo.Name,
 			Branch:    string(repo.DefaultBranch),
-			InstallID: 0, // Will be retrieved from DB completion mode
+			InstallID: types.GitHubAppInstallID(repo.InstallationID),
 		}
 
 		// Scan the repository
