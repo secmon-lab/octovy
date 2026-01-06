@@ -1,25 +1,43 @@
 # Testing Standards
 
 ## Mock Usage Policy
-**CRITICAL**: Do NOT create and use mock repositories (e.g. `mock.ScanRepositoryMock`) in tests. Use actual implementations instead.
 
-Rules:
+### Repository Mock Prohibition
+**CRITICAL - STRICTLY PROHIBITED**: Do NOT create or use mock repositories (`mock.ScanRepositoryMock`) in tests under ANY circumstances.
+
+**Rules**:
 - **ALWAYS use `memory.New()`** for repository testing instead of mocks
-- **Mock only external services** that cannot be run locally (BigQuery, external APIs)
+- **Mock only external services** that cannot be run locally (BigQuery, GitHub API, external APIs)
+- **NEVER mock internal repository implementations** - this is a critical rule violation
 - **Memory implementation provides real behavior** - use it to verify actual data persistence and retrieval
 - Mocks hide bugs and don't test real integration - avoid them for internal components
 
-Example:
+**Why this rule exists**:
+- Repository mocks allow tests to pass without verifying actual data persistence logic
+- Memory repository is fast, requires no external dependencies, and tests real behavior
+- Using mocks for repositories defeats the purpose of the dual implementation strategy (memory/firestore)
+- Mock repositories create maintenance burden and hide integration bugs
+
+**Example**:
 ```go
-// BAD - Using mock repository
+// BAD - STRICTLY PROHIBITED - Using mock repository
 mockRepo := &mock.ScanRepositoryMock{}
+mockRepo.GetRepositoryFunc = func(...) {...}
 mockRepo.ListVulnerabilitiesFunc = func(...) {...}
 
 // GOOD - Using memory repository
+import "github.com/m-mizutani/octovy/pkg/repository/memory"
+
 memRepo := memory.New()
-// Test against actual implementation
+// Test against actual implementation with real data persistence
+repo, err := memRepo.GetRepository(ctx, repoID)
 vulns, err := memRepo.ListVulnerabilities(ctx, repoID, branchName, targetID)
 ```
+
+**What to mock instead**:
+- External APIs: `mock.GitHubAppMock`, HTTP clients
+- Cloud services: `mock.BigQueryMock`
+- External tools: Trivy client mock
 
 ## Testing Framework
 - Uses `github.com/m-mizutani/gt` test framework for assertions
