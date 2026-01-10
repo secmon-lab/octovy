@@ -38,3 +38,10 @@ type ScanGitHubRepoRemoteInput struct {
 type ScanGitHubReposByOwnerInput struct {
 	Owner string
 }
+
+// ScanGitHubReposByOwnerFromAPIInput is input for scanning all repositories
+// for a GitHub owner using GitHub App API (instead of Firestore).
+type ScanGitHubReposByOwnerFromAPIInput struct {
+	Owner     string
+	InstallID types.GitHubAppInstallID // optional; if not set, will be fetched from GitHub API
+}

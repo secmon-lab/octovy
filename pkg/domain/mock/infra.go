@@ -7,6 +7,7 @@ import (
 	"cloud.google.com/go/bigquery"
 	"context"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
+	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"net/http"
 	"net/url"
@@ -260,8 +261,14 @@ var _ interfaces.GitHubApp = &GitHubAppMock{}
 //			GetArchiveURLFunc: func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error) {
 //				panic("mock out the GetArchiveURL method")
 //			},
+//			GetInstallationIDForOwnerFunc: func(ctx context.Context, owner string) (types.GitHubAppInstallID, error) {
+//				panic("mock out the GetInstallationIDForOwner method")
+//			},
 //			HTTPClientFunc: func(installID types.GitHubAppInstallID) (*http.Client, error) {
 //				panic("mock out the HTTPClient method")
+//			},
+//			ListInstallationReposFunc: func(ctx context.Context, installID types.GitHubAppInstallID) ([]*model.GitHubAPIRepository, error) {
+//				panic("mock out the ListInstallationRepos method")
 //			},
 //		}
 //
@@ -273,8 +280,14 @@ type GitHubAppMock struct {
 	// GetArchiveURLFunc mocks the GetArchiveURL method.
 	GetArchiveURLFunc func(ctx context.Context, input *interfaces.GetArchiveURLInput) (*url.URL, error)
 
+	// GetInstallationIDForOwnerFunc mocks the GetInstallationIDForOwner method.
+	GetInstallationIDForOwnerFunc func(ctx context.Context, owner string) (types.GitHubAppInstallID, error)
+
 	// HTTPClientFunc mocks the HTTPClient method.
 	HTTPClientFunc func(installID types.GitHubAppInstallID) (*http.Client, error)
+
+	// ListInstallationReposFunc mocks the ListInstallationRepos method.
+	ListInstallationReposFunc func(ctx context.Context, installID types.GitHubAppInstallID) ([]*model.GitHubAPIRepository, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -285,14 +298,30 @@ type GitHubAppMock struct {
 			// Input is the input argument value.
 			Input *interfaces.GetArchiveURLInput
 		}
+		// GetInstallationIDForOwner holds details about calls to the GetInstallationIDForOwner method.
+		GetInstallationIDForOwner []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Owner is the owner argument value.
+			Owner string
+		}
 		// HTTPClient holds details about calls to the HTTPClient method.
 		HTTPClient []struct {
 			// InstallID is the installID argument value.
 			InstallID types.GitHubAppInstallID
 		}
+		// ListInstallationRepos holds details about calls to the ListInstallationRepos method.
+		ListInstallationRepos []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// InstallID is the installID argument value.
+			InstallID types.GitHubAppInstallID
+		}
 	}
-	lockGetArchiveURL sync.RWMutex
-	lockHTTPClient    sync.RWMutex
+	lockGetArchiveURL             sync.RWMutex
+	lockGetInstallationIDForOwner sync.RWMutex
+	lockHTTPClient                sync.RWMutex
+	lockListInstallationRepos     sync.RWMutex
 }
 
 // GetArchiveURL calls GetArchiveURLFunc.
@@ -331,6 +360,42 @@ func (mock *GitHubAppMock) GetArchiveURLCalls() []struct {
 	return calls
 }
 
+// GetInstallationIDForOwner calls GetInstallationIDForOwnerFunc.
+func (mock *GitHubAppMock) GetInstallationIDForOwner(ctx context.Context, owner string) (types.GitHubAppInstallID, error) {
+	if mock.GetInstallationIDForOwnerFunc == nil {
+		panic("GitHubAppMock.GetInstallationIDForOwnerFunc: method is nil but GitHubApp.GetInstallationIDForOwner was just called")
+	}
+	callInfo := struct {
+		Ctx   context.Context
+		Owner string
+	}{
+		Ctx:   ctx,
+		Owner: owner,
+	}
+	mock.lockGetInstallationIDForOwner.Lock()
+	mock.calls.GetInstallationIDForOwner = append(mock.calls.GetInstallationIDForOwner, callInfo)
+	mock.lockGetInstallationIDForOwner.Unlock()
+	return mock.GetInstallationIDForOwnerFunc(ctx, owner)
+}
+
+// GetInstallationIDForOwnerCalls gets all the calls that were made to GetInstallationIDForOwner.
+// Check the length with:
+//
+//	len(mockedGitHubApp.GetInstallationIDForOwnerCalls())
+func (mock *GitHubAppMock) GetInstallationIDForOwnerCalls() []struct {
+	Ctx   context.Context
+	Owner string
+} {
+	var calls []struct {
+		Ctx   context.Context
+		Owner string
+	}
+	mock.lockGetInstallationIDForOwner.RLock()
+	calls = mock.calls.GetInstallationIDForOwner
+	mock.lockGetInstallationIDForOwner.RUnlock()
+	return calls
+}
+
 // HTTPClient calls HTTPClientFunc.
 func (mock *GitHubAppMock) HTTPClient(installID types.GitHubAppInstallID) (*http.Client, error) {
 	if mock.HTTPClientFunc == nil {
@@ -360,5 +425,41 @@ func (mock *GitHubAppMock) HTTPClientCalls() []struct {
 	mock.lockHTTPClient.RLock()
 	calls = mock.calls.HTTPClient
 	mock.lockHTTPClient.RUnlock()
+	return calls
+}
+
+// ListInstallationRepos calls ListInstallationReposFunc.
+func (mock *GitHubAppMock) ListInstallationRepos(ctx context.Context, installID types.GitHubAppInstallID) ([]*model.GitHubAPIRepository, error) {
+	if mock.ListInstallationReposFunc == nil {
+		panic("GitHubAppMock.ListInstallationReposFunc: method is nil but GitHubApp.ListInstallationRepos was just called")
+	}
+	callInfo := struct {
+		Ctx       context.Context
+		InstallID types.GitHubAppInstallID
+	}{
+		Ctx:       ctx,
+		InstallID: installID,
+	}
+	mock.lockListInstallationRepos.Lock()
+	mock.calls.ListInstallationRepos = append(mock.calls.ListInstallationRepos, callInfo)
+	mock.lockListInstallationRepos.Unlock()
+	return mock.ListInstallationReposFunc(ctx, installID)
+}
+
+// ListInstallationReposCalls gets all the calls that were made to ListInstallationRepos.
+// Check the length with:
+//
+//	len(mockedGitHubApp.ListInstallationReposCalls())
+func (mock *GitHubAppMock) ListInstallationReposCalls() []struct {
+	Ctx       context.Context
+	InstallID types.GitHubAppInstallID
+} {
+	var calls []struct {
+		Ctx       context.Context
+		InstallID types.GitHubAppInstallID
+	}
+	mock.lockListInstallationRepos.RLock()
+	calls = mock.calls.ListInstallationRepos
+	mock.lockListInstallationRepos.RUnlock()
 	return calls
 }

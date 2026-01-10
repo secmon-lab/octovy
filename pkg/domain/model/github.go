@@ -91,3 +91,13 @@ type GitHubIssueComment struct {
 	Body        string
 	IsMinimized bool
 }
+
+// GitHubAPIRepository represents a repository returned by GitHub API.
+// Named differently from Repository to avoid confusion with Firestore Repository model.
+type GitHubAPIRepository struct {
+	Owner         string
+	Name          string
+	DefaultBranch string
+	Archived      bool
+	Disabled      bool
+}
