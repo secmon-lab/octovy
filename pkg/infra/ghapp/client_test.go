@@ -1,6 +1,9 @@
 package ghapp_test
 
 import (
+	"context"
+	"os"
+	"strconv"
 	"testing"
 
 	"github.com/m-mizutani/gt"
@@ -46,4 +49,43 @@ func TestNew(t *testing.T) {
 		gt.Error(t, err)
 		gt.V(t, httpClient).Equal(nil)
 	})
+}
+
+func TestListInstallationRepos_Integration(t *testing.T) {
+	appIDStr := os.Getenv("TEST_GITHUB_APP_ID")
+	privateKey := os.Getenv("TEST_GITHUB_PRIVATE_KEY")
+	owner := os.Getenv("TEST_GITHUB_OWNER")
+
+	if appIDStr == "" || privateKey == "" || owner == "" {
+		t.Skip("TEST_GITHUB_APP_ID, TEST_GITHUB_PRIVATE_KEY, and TEST_GITHUB_OWNER must be set")
+	}
+
+	appID, err := strconv.ParseInt(appIDStr, 10, 64)
+	gt.NoError(t, err)
+
+	client, err := ghapp.New(types.GitHubAppID(appID), types.GitHubAppPrivateKey(privateKey))
+	gt.NoError(t, err)
+
+	ctx := context.Background()
+
+	// Get installation ID for owner
+	installID, err := client.GetInstallationIDForOwner(ctx, owner)
+	gt.NoError(t, err)
+	gt.V(t, installID).NotEqual(types.GitHubAppInstallID(0))
+
+	t.Logf("Found installation ID: %d for owner: %s", installID, owner)
+
+	// List repos for installation
+	repos, err := client.ListInstallationRepos(ctx, installID)
+	gt.NoError(t, err)
+
+	t.Logf("Found %d repositories for owner: %s", len(repos), owner)
+
+	// Verify repos have expected fields
+	for _, repo := range repos {
+		gt.V(t, repo.Owner).NotEqual("")
+		gt.V(t, repo.Name).NotEqual("")
+		t.Logf("  - %s/%s (default_branch: %s, archived: %v, disabled: %v)",
+			repo.Owner, repo.Name, repo.DefaultBranch, repo.Archived, repo.Disabled)
+	}
 }

@@ -101,6 +101,7 @@ func scanRemoteCommand() *cli.Command {
 		commit       string
 		branch       string
 		installIDRaw int64
+		scanAll      bool
 	)
 
 	return &cli.Command{
@@ -145,6 +146,13 @@ func scanRemoteCommand() *cli.Command {
 				Sources:     cli.EnvVars("OCTOVY_TRIVY_PATH"),
 				Destination: &trivyPath,
 			},
+			&cli.BoolFlag{
+				Name:        "all",
+				Aliases:     []string{"a"},
+				Usage:       "Scan all repositories for the owner using GitHub API (instead of Firestore)",
+				Sources:     cli.EnvVars("OCTOVY_SCAN_ALL"),
+				Destination: &scanAll,
+			},
 		}, bigQuery.Flags(), firestore.Flags(), githubApp.Flags()),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			return runScanRemote(ctx, &scanRemoteParams{
@@ -154,6 +162,7 @@ func scanRemoteCommand() *cli.Command {
 				branch:       branch,
 				installIDRaw: installIDRaw,
 				trivyPath:    trivyPath,
+				scanAll:      scanAll,
 				bigQuery:     &bigQuery,
 				firestore:    &firestore,
 				githubApp:    &githubApp,
@@ -169,6 +178,7 @@ type scanRemoteParams struct {
 	branch       string
 	installIDRaw int64
 	trivyPath    string
+	scanAll      bool
 	bigQuery     *config.BigQuery
 	firestore    *config.Firestore
 	githubApp    *config.GitHubApp
@@ -214,6 +224,19 @@ func runScanRemote(ctx context.Context, params *scanRemoteParams) error {
 
 	// Check if this is owner-only mode (repo not specified)
 	if params.repo == "" {
+		// Use --all mode (GitHub API) or Firestore mode
+		if params.scanAll {
+			apiInput := &model.ScanGitHubReposByOwnerFromAPIInput{
+				Owner:     params.owner,
+				InstallID: types.GitHubAppInstallID(params.installIDRaw),
+			}
+			if err := uc.ScanGitHubReposByOwnerFromAPI(ctx, apiInput); err != nil {
+				return goerr.Wrap(err, "failed to scan repositories by owner using GitHub API")
+			}
+			return nil
+		}
+
+		// Firestore mode (default when --all is not specified)
 		ownerInput := &model.ScanGitHubReposByOwnerInput{
 			Owner: params.owner,
 		}

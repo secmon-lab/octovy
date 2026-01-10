@@ -9,6 +9,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 
+	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 )
 
@@ -35,6 +36,8 @@ type BigQuery interface {
 type GitHubApp interface {
 	GetArchiveURL(ctx context.Context, input *GetArchiveURLInput) (*url.URL, error)
 	HTTPClient(installID types.GitHubAppInstallID) (*http.Client, error)
+	ListInstallationRepos(ctx context.Context, installID types.GitHubAppInstallID) ([]*model.GitHubAPIRepository, error)
+	GetInstallationIDForOwner(ctx context.Context, owner string) (types.GitHubAppInstallID, error)
 }
 
 type GetArchiveURLInput struct {

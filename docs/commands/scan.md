@@ -152,12 +152,21 @@ octovy scan remote \
   --github-app-private-key "$(cat private-key.pem)" \
   --bigquery-project-id my-project
 
-# Scan ALL repositories for an owner (organization-wide scan)
+# Scan ALL repositories for an owner using GitHub API (--all mode)
+octovy scan remote \
+  --github-owner myorg \
+  --all \
+  --github-app-id 12345 \
+  --github-app-private-key "$(cat private-key.pem)" \
+  --bigquery-project-id my-project
+
+# Scan repositories for an owner from Firestore (requires Firestore setup)
 octovy scan remote \
   --github-owner myorg \
   --github-app-id 12345 \
   --github-app-private-key "$(cat private-key.pem)" \
-  --bigquery-project-id my-project
+  --bigquery-project-id my-project \
+  --firestore-project-id my-project
 ```
 
 ### Command Flags
@@ -165,12 +174,13 @@ octovy scan remote \
 | Flag | Env Variable | Required | Default | Description |
 |------|--------------|----------|---------|-------------|
 | `--github-owner` | `OCTOVY_GITHUB_OWNER` | Yes | N/A | GitHub repository owner |
-| `--github-repo` | `OCTOVY_GITHUB_REPO` | No | N/A | Repository name (if omitted, scans all repos for owner) |
+| `--github-repo` | `OCTOVY_GITHUB_REPO` | No | N/A | Repository name (if omitted, scans repos for owner) |
 | `--github-commit` | `OCTOVY_GITHUB_COMMIT` | No | N/A | Commit ID to scan (mutually exclusive with `--github-branch`) |
 | `--github-branch` | `OCTOVY_GITHUB_BRANCH` | No | N/A | Branch name to scan (mutually exclusive with `--github-commit`) |
 | `--github-app-installation-id` | `OCTOVY_GITHUB_APP_INSTALLATION_ID` | No | N/A | GitHub App Installation ID |
 | `--github-app-id` | `OCTOVY_GITHUB_APP_ID` | Yes | N/A | GitHub App ID |
 | `--github-app-private-key` | `OCTOVY_GITHUB_APP_PRIVATE_KEY` | Yes | N/A | GitHub App Private Key (PEM format) |
+| `--all`, `-a` | `OCTOVY_SCAN_ALL` | No | `false` | Scan all repos for owner using GitHub API (no Firestore needed) |
 | `--bigquery-project-id` | `OCTOVY_BIGQUERY_PROJECT_ID` | Yes | N/A | GCP Project ID |
 | `--bigquery-dataset-id` | `OCTOVY_BIGQUERY_DATASET_ID` | No | `octovy` | BigQuery dataset name |
 | `--bigquery-table-id` | `OCTOVY_BIGQUERY_TABLE_ID` | No | `scans` | BigQuery table name |
@@ -194,17 +204,44 @@ octovy scan remote \
 
 #### Organization-Wide Scan
 
-Scan all repositories that the GitHub App has access to:
+There are two modes for scanning all repositories of an owner:
+
+**1. Using GitHub API (`--all` mode) - Recommended**
+
+Scan all repositories that the GitHub App has access to, without requiring Firestore:
+
+```bash
+octovy scan remote \
+  --github-owner myorg \
+  --all \
+  --github-app-id 12345 \
+  --github-app-private-key "$(cat private-key.pem)" \
+  --bigquery-project-id my-project
+```
+
+This mode:
+- Fetches the repository list directly from GitHub API
+- Does not require Firestore configuration
+- Automatically excludes archived and disabled repositories
+- Scans the default branch of each repository
+
+**2. Using Firestore (legacy mode)**
+
+Scan repositories registered in Firestore:
 
 ```bash
 octovy scan remote \
   --github-owner myorg \
   --github-app-id 12345 \
   --github-app-private-key "$(cat private-key.pem)" \
-  --bigquery-project-id my-project
+  --bigquery-project-id my-project \
+  --firestore-project-id my-project
 ```
 
-This will iterate through all repositories accessible by the GitHub App installation and scan each one.
+This mode:
+- Requires Firestore to be configured
+- Only scans repositories that have been previously registered in Firestore
+- Useful when you want to scan only a specific subset of repositories
 
 #### Branch-Specific Scan
 

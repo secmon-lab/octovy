@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-github/v53/github"
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
+	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"github.com/m-mizutani/octovy/pkg/utils/logging"
 )
@@ -92,4 +93,85 @@ func (x *Client) GetArchiveURL(ctx context.Context, input *interfaces.GetArchive
 
 func (x *Client) HTTPClient(installID types.GitHubAppInstallID) (*http.Client, error) {
 	return x.buildGithubHTTPClient(installID)
+}
+
+func (x *Client) ListInstallationRepos(ctx context.Context, installID types.GitHubAppInstallID) ([]*model.GitHubAPIRepository, error) {
+	client, err := x.buildGithubClient(installID)
+	if err != nil {
+		return nil, err
+	}
+
+	var allRepos []*model.GitHubAPIRepository
+	opts := &github.ListOptions{PerPage: 100}
+
+	for {
+		result, resp, err := client.Apps.ListRepos(ctx, opts)
+		if err != nil {
+			return nil, goerr.Wrap(err, "failed to list installation repos")
+		}
+
+		for _, repo := range result.Repositories {
+			allRepos = append(allRepos, &model.GitHubAPIRepository{
+				Owner:         repo.GetOwner().GetLogin(),
+				Name:          repo.GetName(),
+				DefaultBranch: repo.GetDefaultBranch(),
+				Archived:      repo.GetArchived(),
+				Disabled:      repo.GetDisabled(),
+			})
+		}
+
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+
+	logging.From(ctx).Info("Listed installation repos",
+		slog.Int("count", len(allRepos)),
+		slog.Any("installID", installID),
+	)
+
+	return allRepos, nil
+}
+
+func (x *Client) buildAppClient() (*github.Client, error) {
+	tr := http.DefaultTransport
+	itr, err := ghinstallation.NewAppsTransport(tr, int64(x.appID), []byte(x.pem))
+	if err != nil {
+		return nil, goerr.Wrap(err, "failed to create app transport")
+	}
+	return github.NewClient(&http.Client{Transport: itr}), nil
+}
+
+func (x *Client) GetInstallationIDForOwner(ctx context.Context, owner string) (types.GitHubAppInstallID, error) {
+	client, err := x.buildAppClient()
+	if err != nil {
+		return 0, err
+	}
+
+	// Try organization installation first
+	installation, resp, err := client.Apps.FindOrganizationInstallation(ctx, owner)
+	if err == nil && installation != nil {
+		logging.From(ctx).Info("Found organization installation",
+			slog.String("owner", owner),
+			slog.Int64("installID", installation.GetID()),
+		)
+		return types.GitHubAppInstallID(installation.GetID()), nil
+	}
+
+	// If not found as org, try user installation
+	if resp != nil && resp.StatusCode == http.StatusNotFound {
+		installation, _, err = client.Apps.FindUserInstallation(ctx, owner)
+		if err == nil && installation != nil {
+			logging.From(ctx).Info("Found user installation",
+				slog.String("owner", owner),
+				slog.Int64("installID", installation.GetID()),
+			)
+			return types.GitHubAppInstallID(installation.GetID()), nil
+		}
+	}
+
+	return 0, goerr.Wrap(types.ErrInvalidGitHubData, "installation not found for owner",
+		goerr.V("owner", owner),
+	)
 }
