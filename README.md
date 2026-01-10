@@ -26,6 +26,24 @@ These functions can be used with GitHub Actions or deployed as a GitHub App. Sto
 - **Rapid incident response**: When a critical vulnerability is announced, search for affected packages by name or version across your organization immediately—before vulnerability databases or scanners are updated
 - **Continuous monitoring**: Set up scheduled queries to check for specific critical vulnerabilities periodically
 
+## Prerequisites
+
+Before using Octovy, you need to set up BigQuery and configure Google Cloud authentication.
+
+### 1. Create BigQuery Dataset
+
+```bash
+bq mk --dataset your-project-id:octovy
+```
+
+### 2. Configure Authentication
+
+```bash
+gcloud auth application-default login
+```
+
+For detailed setup instructions (service accounts, IAM permissions, etc.), see [BigQuery Setup Guide](./docs/setup/bigquery.md).
+
 ## Commands
 
 ### `scan` - Scan and Insert
@@ -38,13 +56,17 @@ Scans a local directory. Auto-detects git metadata (owner, repo, commit) from th
 
 ```bash
 # Scan current directory
-octovy scan local
+octovy scan local --bigquery-project-id your-project-id
 
 # Scan specific directory
-octovy scan local --dir /path/to/code
+octovy scan local --dir /path/to/code --bigquery-project-id your-project-id
 
 # With explicit metadata
-octovy scan local --github-owner myorg --github-repo myrepo --github-commit-id abc123
+octovy scan local \
+  --bigquery-project-id your-project-id \
+  --github-owner myorg \
+  --github-repo myrepo \
+  --github-commit-id abc123
 ```
 
 #### `scan remote` - Scan GitHub Repository
@@ -54,6 +76,7 @@ Scans a GitHub repository remotely via GitHub App API. Requires GitHub App confi
 ```bash
 # Scan a specific repository
 octovy scan remote \
+  --bigquery-project-id your-project-id \
   --github-owner myorg \
   --github-repo myrepo \
   --github-app-id 12345 \
@@ -61,7 +84,9 @@ octovy scan remote \
 
 # Scan all repositories for an organization
 octovy scan remote \
+  --bigquery-project-id your-project-id \
   --github-owner myorg \
+  --all \
   --github-app-id 12345 \
   --github-app-private-key "$(cat private-key.pem)"
 ```
@@ -75,10 +100,13 @@ Inserts Trivy scan result JSON files into BigQuery. Useful when you already have
 ```bash
 # Generate Trivy result and insert
 trivy fs --format json --output results.json .
-octovy insert -f results.json
+octovy insert -f results.json --bigquery-project-id your-project-id
 
 # Insert with explicit metadata
-octovy insert -f results.json --github-owner myorg --github-repo myrepo
+octovy insert -f results.json \
+  --bigquery-project-id your-project-id \
+  --github-owner myorg \
+  --github-repo myrepo
 ```
 
 [Full documentation →](./docs/commands/insert.md)
@@ -88,7 +116,12 @@ octovy insert -f results.json --github-owner myorg --github-repo myrepo
 Runs an HTTP server that receives GitHub webhooks and automatically scans repositories on `push` and `pull_request` events.
 
 ```bash
-octovy serve --addr :8080
+octovy serve \
+  --addr :8080 \
+  --bigquery-project-id your-project-id \
+  --github-app-id 12345 \
+  --github-app-private-key "$(cat private-key.pem)" \
+  --github-app-secret your-webhook-secret
 ```
 
 [Full documentation →](./docs/commands/serve.md)
