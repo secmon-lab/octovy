@@ -12,8 +12,6 @@
 
 ## Overview
 
-### Background
-
 [Trivy](https://github.com/aquasecurity/trivy) is a powerful open-source vulnerability scanner and SBOM generator with comprehensive detection capabilities across multiple ecosystems. Trivy as a CLI tool focuses on scanning functionality; for organizations that want to integrate scan results into their existing data infrastructure (such as BigQuery), Octovy provides a lightweight solution.
 
 Octovy exports Trivy scan results to BigQuery, making them searchable via SQL. It provides three core functions:
