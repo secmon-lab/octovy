@@ -12,338 +12,172 @@
 
 ## Overview
 
-Octovy stores [Trivy](https://github.com/aquasecurity/trivy) vulnerability scan results in BigQuery. This enables historical analysis, vulnerability trend tracking, and compliance auditing.
+### Background
 
-**What it does:**
-- **BigQuery Storage**: Stores Trivy scan results in BigQuery for SQL-based querying
-- **Three entry points**: Scan local directories, insert existing results, or automate via GitHub webhooks
-- **Firestore Support** (optional): Stores metadata in Firestore for real-time querying
+[Trivy](https://github.com/aquasecurity/trivy) is a powerful open-source vulnerability scanner and SBOM generator with comprehensive detection capabilities across multiple ecosystems. Trivy as a CLI tool focuses on scanning functionality; for organizations that want to integrate scan results into their existing data infrastructure (such as BigQuery), Octovy provides a lightweight solution.
 
-## Key Features
+Octovy exports Trivy scan results to BigQuery, making them searchable via SQL. It provides three core functions:
 
-Octovy provides three ways to insert scan results into BigQuery:
+- **Insert existing Trivy results** (`insert`): Import Trivy JSON output files into BigQuery
+- **Scan and insert** (`scan`): Run Trivy on a local directory and insert results into BigQuery
+- **GitHub App webhook server** (`serve`): Scan repositories automatically on `push` and `pull_request` events
 
-### 1. `scan` - Scan Local Directory
-Scans a local directory with Trivy and inserts results into BigQuery. Use for local development and CI/CD pipelines.
+These functions can be used with GitHub Actions or deployed as a GitHub App. Storing results in BigQuery enables organization-wide vulnerability management:
 
-### 2. `insert` - Insert Existing Results
-Inserts Trivy scan result JSON files into BigQuery. Use to integrate with existing Trivy workflows.
+- **Measure vulnerability exposure**: Query how many packages with known vulnerabilities exist across all repositories in your organization
+- **Rapid incident response**: When a critical vulnerability is announced, search for affected packages by name or version across your organization immediately—before vulnerability databases or scanners are updated
+- **Continuous monitoring**: Set up scheduled queries to check for specific critical vulnerabilities periodically
 
-### 3. `serve` - GitHub Webhook Server
-Runs as a GitHub App to scan repositories on `push` and `pull_request` events. Use for organization-wide scanning.
+## Commands
 
-## Setup
+### `scan` - Scan and Insert
 
-### Prerequisites: BigQuery (Required)
-
-BigQuery is the primary storage backend for Octovy. You must configure BigQuery before using any Octovy command.
-
-#### 1. Create a BigQuery Dataset
+Scans a local directory with Trivy and inserts results into BigQuery. Auto-detects git metadata (owner, repo, commit) from the local repository.
 
 ```bash
-# Using gcloud CLI
-gcloud config set project YOUR_PROJECT_ID
-bq mk --dataset YOUR_PROJECT_ID:octovy
-```
-
-Or create via [Google Cloud Console](https://console.cloud.google.com/bigquery):
-- Navigate to BigQuery
-- Click "Create Dataset"
-- Dataset ID: `octovy` (or your preferred name)
-- Data location: Choose your preferred region
-
-#### 2. Configure Authentication
-
-Octovy uses Google Cloud Application Default Credentials (ADC):
-
-```bash
-# For local development
-gcloud auth application-default login
-
-# For production (service account)
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-```
-
-#### 3. Grant Permissions
-
-The service account or user must have:
-- `bigquery.datasets.get`
-- `bigquery.tables.create`
-- `bigquery.tables.updateData`
-- `bigquery.tables.get`
-
-You can use the predefined role `roles/bigquery.dataEditor`.
-
-#### 4. Set Environment Variables
-
-```bash
-export OCTOVY_BIGQUERY_PROJECT_ID=your-project-id
-export OCTOVY_BIGQUERY_DATASET_ID=octovy  # default: octovy
-export OCTOVY_BIGQUERY_TABLE_ID=scans     # default: scans
-```
-
-Octovy will automatically create and update the table schema as needed.
-
-### Optional: Firestore
-
-Firestore stores repository metadata, branches, targets, and vulnerabilities. This enables real-time querying and relationship tracking.
-
-**When to use Firestore:**
-- Real-time vulnerability status queries
-- Repository metadata and relationship tracking
-- Hierarchical data organization (repo → branch → target → vulnerability)
-
-**When to skip Firestore:**
-- Only historical scan data needed
-- Compliance reporting and analytics use cases
-
-#### 1. Enable Firestore
-
-```bash
-# Enable Firestore API
-gcloud services enable firestore.googleapis.com --project=YOUR_PROJECT_ID
-
-# Create Firestore database
-gcloud firestore databases create --location=YOUR_REGION --project=YOUR_PROJECT_ID
-```
-
-Or via [Google Cloud Console](https://console.cloud.google.com/firestore):
-- Navigate to Firestore
-- Click "Create Database"
-- Choose Native mode
-- Select your region
-
-#### 2. Grant Permissions
-
-The service account must have:
-- `datastore.databases.get`
-- `datastore.entities.create`
-- `datastore.entities.get`
-- `datastore.entities.update`
-
-You can use the predefined role `roles/datastore.user`.
-
-#### 3. Set Environment Variables
-
-```bash
-export OCTOVY_FIRESTORE_PROJECT_ID=your-project-id
-export OCTOVY_FIRESTORE_DATABASE_ID="(default)"  # or your database ID
-```
-
-### Optional: GitHub App (for `serve` command only)
-
-To use the `serve` command to scan repositories via GitHub webhooks, create a GitHub App.
-
-#### 1. Create a GitHub App
-
-Go to [GitHub Settings > Developer settings > GitHub Apps](https://github.com/settings/apps) and create a new app:
-
-**General Settings:**
-- **Webhook URL**: `https://your-domain.com/webhook/github/app`
-- **Webhook secret**: Generate a random string (e.g., `openssl rand -hex 32`)
-
-**Permissions:**
-- Repository permissions:
-  - **Contents**: Read-only
-  - **Metadata**: Read-only
-
-**Subscribe to events:**
-- **Pull request**
-- **Push**
-
-#### 2. Generate Private Key
-
-After creating the app:
-- Scroll to "Private keys" section
-- Click "Generate a private key"
-- Download the `.pem` file
-
-#### 3. Note Your App Credentials
-
-You'll need:
-- **App ID** (shown on the app's general settings page)
-- **Private Key** (the `.pem` file you downloaded)
-- **Webhook Secret** (the secret you configured)
-
-#### 4. Install the App
-
-Install the GitHub App on repositories to scan:
-- Go to the app's page
-- Click "Install App"
-- Select repositories
-
-## Usage
-
-### 1. `scan` - Scan Local Directory
-
-Scans a local directory with Trivy and inserts results into BigQuery.
-
-**Basic Usage:**
-
-```bash
-# Scan current directory (auto-detects git metadata)
+# Scan current directory
 octovy scan
 
 # Scan specific directory
-octovy scan --dir /path/to/repository
+octovy scan --dir /path/to/code
+
+# With explicit metadata
+octovy scan --github-owner myorg --github-repo myrepo --github-commit-id abc123
 ```
 
-**With BigQuery Configuration:**
+[Full documentation →](./docs/commands/scan.md)
+
+### `insert` - Insert Existing Results
+
+Inserts Trivy scan result JSON files into BigQuery. Useful when you already have Trivy workflows or want to decouple scanning from insertion.
 
 ```bash
-octovy scan \
-  --bigquery-project-id my-project \
-  --bigquery-dataset-id octovy \
-  --bigquery-table-id scans
-```
-
-**With Firestore:**
-
-```bash
-octovy scan \
-  --bigquery-project-id my-project \
-  --firestore-project-id my-project \
-  --firestore-database-id "(default)"
-```
-
-**With Explicit GitHub Metadata:**
-
-```bash
-octovy scan \
-  --github-owner myorg \
-  --github-repo myrepo \
-  --github-commit-id abc123def456
-```
-
-**How it works:**
-1. Auto-detects GitHub metadata from local git repository (owner, repo, commit ID)
-2. Runs Trivy scan on the directory
-3. Inserts results into BigQuery
-4. Optionally stores metadata in Firestore
-
-### 2. `insert` - Insert Existing Trivy Results
-
-Inserts a Trivy scan result JSON file into BigQuery.
-
-**Basic Usage:**
-
-```bash
-# Insert existing Trivy result (auto-detects git metadata)
-octovy insert -f scan-result.json
+# Generate Trivy result and insert
+trivy fs --format json --output results.json .
+octovy insert -f results.json
 
 # Insert with explicit metadata
-octovy insert -f scan-result.json \
-  --github-owner myorg \
-  --github-repo myrepo \
-  --github-commit-id abc123def456
+octovy insert -f results.json --github-owner myorg --github-repo myrepo
 ```
 
-**Generate Trivy Results:**
+[Full documentation →](./docs/commands/insert.md)
 
-```bash
-# First, run Trivy to generate results
-trivy fs --format json --output scan-result.json /path/to/code
+### `serve` - GitHub App Server
 
-# Then insert into BigQuery
-octovy insert -f scan-result.json
-```
-
-**With BigQuery and Firestore:**
-
-```bash
-octovy insert -f scan-result.json \
-  --bigquery-project-id my-project \
-  --bigquery-dataset-id octovy \
-  --firestore-project-id my-project
-```
-
-**How it works:**
-1. Reads the Trivy JSON result file
-2. Auto-detects GitHub metadata from local git repository (if not specified)
-3. Inserts results into BigQuery
-4. Optionally stores metadata in Firestore
-
-**Use Cases:**
-- Integrate with existing Trivy workflows
-- Separate scanning and insertion steps
-- Insert results from different Trivy configurations
-
-### 3. `serve` - GitHub Webhook Server
-
-Runs Octovy as a server to scan repositories on GitHub events.
-
-**Basic Usage:**
+Runs an HTTP server that receives GitHub webhooks and automatically scans repositories on `push` and `pull_request` events.
 
 ```bash
 octovy serve --addr :8080
 ```
 
-**With Environment Variables:**
+[Full documentation →](./docs/commands/serve.md)
 
-```bash
-export OCTOVY_ADDR=:8080
-export OCTOVY_GITHUB_APP_ID=123456
-export OCTOVY_GITHUB_APP_PRIVATE_KEY=/path/to/private-key.pem
-export OCTOVY_GITHUB_APP_SECRET=your-webhook-secret
-export OCTOVY_BIGQUERY_PROJECT_ID=my-project
-export OCTOVY_BIGQUERY_DATASET_ID=octovy
-export OCTOVY_FIRESTORE_PROJECT_ID=my-project
+## BigQuery Queries
 
-octovy serve
+Once scan results are in BigQuery, you can run powerful queries for vulnerability management.
+
+### Find All Critical Vulnerabilities
+
+```sql
+SELECT
+  github.owner,
+  github.repo_name,
+  github.commit_id,
+  vuln.VulnerabilityID,
+  vuln.PkgName,
+  vuln.InstalledVersion,
+  vuln.Severity
+FROM `your-project.octovy.scans`,
+  UNNEST(report.Results) AS result,
+  UNNEST(result.Vulnerabilities) AS vuln
+WHERE vuln.Severity = 'CRITICAL'
+ORDER BY timestamp DESC
 ```
 
-**Using Docker:**
+### Search for a Specific Package (e.g., Log4j)
 
-The Docker image does not include Trivy. You must provide Trivy binary by mounting it from the host:
+When a critical vulnerability like Log4Shell is announced, immediately find all affected repositories:
 
-```bash
-# Install Trivy on your host system first
-# See: https://aquasecurity.github.io/trivy/latest/getting-started/installation/
-
-# Run Octovy with Trivy mounted from host
-docker run -p 8080:8080 \
-  -v /path/to/private-key.pem:/key.pem \
-  -v $(which trivy):/trivy \
-  -e OCTOVY_ADDR=:8080 \
-  -e OCTOVY_GITHUB_APP_ID=123456 \
-  -e OCTOVY_GITHUB_APP_PRIVATE_KEY=/key.pem \
-  -e OCTOVY_GITHUB_APP_SECRET=your-webhook-secret \
-  -e OCTOVY_BIGQUERY_PROJECT_ID=my-project \
-  -e OCTOVY_BIGQUERY_DATASET_ID=octovy \
-  -e OCTOVY_TRIVY_PATH=/trivy \
-  ghcr.io/secmon-lab/octovy
+```sql
+SELECT DISTINCT
+  github.owner,
+  github.repo_name,
+  pkg.Name,
+  pkg.Version
+FROM `your-project.octovy.scans`,
+  UNNEST(report.Results) AS result,
+  UNNEST(result.Packages) AS pkg
+WHERE LOWER(pkg.Name) LIKE '%log4j%'
+ORDER BY github.owner, github.repo_name
 ```
 
-Alternatively, you can build a custom image with Trivy included. See [examples/Dockerfile](examples/Dockerfile) for a multi-stage build example.
+### Count Vulnerabilities by Severity Across Organization
 
-**How it works:**
-1. Receives webhook events from GitHub (`push` and `pull_request`)
-2. Downloads repository code as archive
-3. Extracts and scans with Trivy
-4. Inserts results into BigQuery
-5. Optionally stores metadata in Firestore
-6. Cleans up temporary files
+```sql
+SELECT
+  vuln.Severity,
+  COUNT(*) AS count
+FROM `your-project.octovy.scans`,
+  UNNEST(report.Results) AS result,
+  UNNEST(result.Vulnerabilities) AS vuln
+WHERE timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+GROUP BY vuln.Severity
+ORDER BY count DESC
+```
 
-**Required Environment Variables:**
-- `OCTOVY_ADDR`: Server bind address (e.g., `:8080`)
-- `OCTOVY_GITHUB_APP_ID`: GitHub App ID
-- `OCTOVY_GITHUB_APP_PRIVATE_KEY`: Path to private key file or PEM content
-- `OCTOVY_GITHUB_APP_SECRET`: Webhook secret
+### Find Repositories with Specific CVE
 
-**Optional Environment Variables:**
-- `OCTOVY_BIGQUERY_PROJECT_ID`: BigQuery project ID
-- `OCTOVY_BIGQUERY_DATASET_ID`: BigQuery dataset ID (default: `octovy`)
-- `OCTOVY_BIGQUERY_TABLE_ID`: BigQuery table ID (default: `scans`)
-- `OCTOVY_FIRESTORE_PROJECT_ID`: Firestore project ID
-- `OCTOVY_FIRESTORE_DATABASE_ID`: Firestore database ID (default: `(default)`)
-- `OCTOVY_TRIVY_PATH`: Path to Trivy binary (default: `trivy`)
-- `OCTOVY_LOG_FORMAT`: Log format - `text` or `json` (default: `text`)
-- `OCTOVY_SENTRY_DSN`: Sentry DSN for error tracking
-- `OCTOVY_SENTRY_ENV`: Sentry environment name
+```sql
+SELECT DISTINCT
+  github.owner,
+  github.repo_name,
+  vuln.PkgName,
+  vuln.InstalledVersion,
+  vuln.FixedVersion
+FROM `your-project.octovy.scans`,
+  UNNEST(report.Results) AS result,
+  UNNEST(result.Vulnerabilities) AS vuln
+WHERE vuln.VulnerabilityID = 'CVE-2021-44228'
+```
 
-**Endpoints:**
-- `POST /webhook/github/app` - GitHub App webhook endpoint
-- `GET /health` - Health check endpoint
+### Latest Scan Results per Repository
+
+```sql
+SELECT
+  github.owner,
+  github.repo_name,
+  github.commit_id,
+  timestamp,
+  (SELECT COUNT(*) FROM UNNEST(report.Results) r, UNNEST(r.Vulnerabilities)) AS vuln_count
+FROM `your-project.octovy.scans` s
+WHERE timestamp = (
+  SELECT MAX(timestamp)
+  FROM `your-project.octovy.scans`
+  WHERE github.repo_name = s.github.repo_name
+    AND github.owner = s.github.owner
+)
+ORDER BY vuln_count DESC
+```
+
+## Setup Guides
+
+### Required Setup
+
+- **[BigQuery Setup](./docs/setup/bigquery.md)** - Required for all commands
+
+### Optional Setup
+
+- **[GitHub App Setup](./docs/setup/github-app.md)** - Required only for `serve` command
+- **[Firestore Setup](./docs/setup/firestore.md)** - Optional for real-time metadata tracking
+
+## Documentation
+
+See [docs/README.md](./docs/README.md) for:
+- Detailed command documentation
+- Setup guides for all services
+- Common workflows and examples
+- Troubleshooting guides
+- FAQ
 
 ## License
 
