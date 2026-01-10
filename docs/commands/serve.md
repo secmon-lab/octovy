@@ -30,7 +30,7 @@ octovy serve --addr :8080
 ```bash
 export OCTOVY_ADDR=:8080
 export OCTOVY_GITHUB_APP_ID=123456
-export OCTOVY_GITHUB_APP_PRIVATE_KEY=/path/to/private-key.pem
+export OCTOVY_GITHUB_APP_PRIVATE_KEY="$(cat /path/to/private-key.pem)"
 export OCTOVY_GITHUB_APP_SECRET=your-webhook-secret
 export OCTOVY_BIGQUERY_PROJECT_ID=my-project
 
@@ -39,17 +39,31 @@ octovy serve
 
 ### With Docker
 
+The official Octovy image does not include Trivy. Create a custom image that includes Trivy using a multi-stage build:
+
+**Dockerfile:**
+
+```dockerfile
+FROM aquasecurity/trivy:latest AS trivy
+FROM ghcr.io/secmon-lab/octovy:latest
+
+COPY --from=trivy /usr/local/bin/trivy /usr/local/bin/trivy
+```
+
+**Build and run:**
+
 ```bash
+# Build custom image
+docker build -t octovy-with-trivy .
+
+# Run
 docker run -p 8080:8080 \
-  -v /path/to/private-key.pem:/key.pem \
-  -v $(which trivy):/trivy \
   -e OCTOVY_ADDR=:8080 \
   -e OCTOVY_GITHUB_APP_ID=123456 \
-  -e OCTOVY_GITHUB_APP_PRIVATE_KEY=/key.pem \
+  -e OCTOVY_GITHUB_APP_PRIVATE_KEY="$(cat /path/to/private-key.pem)" \
   -e OCTOVY_GITHUB_APP_SECRET=your-webhook-secret \
   -e OCTOVY_BIGQUERY_PROJECT_ID=my-project \
-  -e OCTOVY_TRIVY_PATH=/trivy \
-  ghcr.io/secmon-lab/octovy
+  octovy-with-trivy
 ```
 
 ## Command Flags Reference
@@ -58,7 +72,7 @@ docker run -p 8080:8080 \
 |------|--------------|----------|---------|-------------|
 | `--addr` | `OCTOVY_ADDR` | ✓ | N/A | Server bind address (e.g., `:8080`, `127.0.0.1:8080`) |
 | `--github-app-id` | `OCTOVY_GITHUB_APP_ID` | ✓ | N/A | GitHub App ID |
-| `--github-app-private-key` | `OCTOVY_GITHUB_APP_PRIVATE_KEY` | ✓ | N/A | Path to private key or PEM content |
+| `--github-app-private-key` | `OCTOVY_GITHUB_APP_PRIVATE_KEY` | ✓ | N/A | Private key PEM content |
 | `--github-app-secret` | `OCTOVY_GITHUB_APP_SECRET` | ✓ | N/A | Webhook secret |
 | `--bigquery-project-id` | `OCTOVY_BIGQUERY_PROJECT_ID` | ✓ | N/A | GCP Project ID |
 | `--bigquery-dataset-id` | `OCTOVY_BIGQUERY_DATASET_ID` | ✗ | `octovy` | BigQuery dataset name |
@@ -89,125 +103,22 @@ curl http://localhost:8080/health
 
 ### Production Deployment (Docker Compose)
 
+Create the same `Dockerfile` as above, then use Docker Compose:
+
 ```yaml
-version: '3'
 services:
   octovy:
-    image: ghcr.io/secmon-lab/octovy:latest
+    build: .
     ports:
       - "8080:8080"
-    volumes:
-      - /usr/bin/trivy:/trivy
-      - ./private-key.pem:/etc/octovy/private-key.pem:ro
     environment:
       OCTOVY_ADDR: :8080
-      OCTOVY_GITHUB_APP_ID: 123456
-      OCTOVY_GITHUB_APP_PRIVATE_KEY: /etc/octovy/private-key.pem
+      OCTOVY_GITHUB_APP_ID: ${GITHUB_APP_ID}
+      OCTOVY_GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY}
       OCTOVY_GITHUB_APP_SECRET: ${GITHUB_APP_SECRET}
       OCTOVY_BIGQUERY_PROJECT_ID: ${GCP_PROJECT_ID}
-      OCTOVY_FIRESTORE_PROJECT_ID: ${GCP_PROJECT_ID}
-      OCTOVY_TRIVY_PATH: /trivy
       OCTOVY_LOG_FORMAT: json
     restart: unless-stopped
-```
-
-### Kubernetes Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: octovy
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: octovy
-  template:
-    metadata:
-      labels:
-        app: octovy
-    spec:
-      serviceAccountName: octovy
-      containers:
-      - name: octovy
-        image: ghcr.io/secmon-lab/octovy:latest
-        ports:
-        - containerPort: 8080
-          name: http
-        env:
-        - name: OCTOVY_ADDR
-          value: ":8080"
-        - name: OCTOVY_GITHUB_APP_ID
-          valueFrom:
-            secretKeyRef:
-              name: octovy-secrets
-              key: app-id
-        - name: OCTOVY_GITHUB_APP_PRIVATE_KEY
-          valueFrom:
-            secretKeyRef:
-              name: octovy-secrets
-              key: private-key
-        - name: OCTOVY_GITHUB_APP_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: octovy-secrets
-              key: webhook-secret
-        - name: OCTOVY_BIGQUERY_PROJECT_ID
-          value: my-project
-        - name: OCTOVY_TRIVY_PATH
-          value: /trivy
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "200m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: octovy
-spec:
-  selector:
-    app: octovy
-  ports:
-  - port: 8080
-    targetPort: 8080
-  type: LoadBalancer
-```
-
-### Nginx Reverse Proxy
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name scanner.example.com;
-
-    ssl_certificate /etc/letsencrypt/live/scanner.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/scanner.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
 ```
 
 ## Endpoints
@@ -216,24 +127,9 @@ server {
 
 GitHub webhook endpoint. Receives `push` and `pull_request` events.
 
-**Request Headers:**
-- `X-Hub-Signature-256`: HMAC signature using webhook secret
-- `X-GitHub-Event`: Event type (`push` or `pull_request`)
-- `X-GitHub-Delivery`: Unique delivery ID
-
-**Response:**
-- `200 OK`: Webhook processed successfully
-- `401 Unauthorized`: Invalid signature
-- `400 Bad Request`: Invalid payload
-
 ### GET /health
 
-Health check endpoint. Returns server status.
-
-**Response:**
-```json
-{"status": "ok"}
-```
+Health check endpoint.
 
 ## How It Works
 
@@ -246,45 +142,6 @@ Health check endpoint. Returns server status.
 7. **Store metadata**: Optionally stores in Firestore
 8. **Cleanup**: Deletes temporary files
 
-## Webhook Events
-
-### Push Event
-
-Triggered when code is pushed to any branch.
-
-```json
-{
-  "action": "push",
-  "repository": {
-    "name": "myrepo",
-    "owner": {"login": "myorg"},
-    "full_name": "myorg/myrepo"
-  },
-  "after": "abc123def456",
-  "ref": "refs/heads/main"
-}
-```
-
-### Pull Request Event
-
-Triggered on PR open, synchronize (new commits), and reopen.
-
-```json
-{
-  "action": "opened|synchronize|reopened",
-  "pull_request": {
-    "head": {
-      "sha": "abc123def456",
-      "ref": "feature/branch"
-    }
-  },
-  "repository": {
-    "name": "myrepo",
-    "owner": {"login": "myorg"}
-  }
-}
-```
-
 ## Environment Variables Reference
 
 ### Required
@@ -293,7 +150,7 @@ Triggered on PR open, synchronize (new commits), and reopen.
 |----------|---------|-------------|
 | `OCTOVY_ADDR` | N/A | Server bind address |
 | `OCTOVY_GITHUB_APP_ID` | N/A | GitHub App ID |
-| `OCTOVY_GITHUB_APP_PRIVATE_KEY` | N/A | Private key path or PEM content |
+| `OCTOVY_GITHUB_APP_PRIVATE_KEY` | N/A | Private key PEM content |
 | `OCTOVY_GITHUB_APP_SECRET` | N/A | Webhook secret |
 | `OCTOVY_BIGQUERY_PROJECT_ID` | N/A | GCP Project ID |
 
@@ -399,13 +256,7 @@ export OCTOVY_TRIVY_PATH=/path/to/trivy
 Large repositories may use significant memory. Increase limits:
 
 ```bash
-# Docker
 docker run -m 2g ...
-
-# Kubernetes
-resources:
-  limits:
-    memory: "2Gi"
 ```
 
 ## Next Steps
