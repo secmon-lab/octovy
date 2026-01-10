@@ -128,17 +128,41 @@ bq show octovy.scans
 
 ## Table Schema
 
-Octovy automatically creates the BigQuery table with the following columns:
+Octovy automatically creates the BigQuery table with a nested structure:
 
-- `scan_id`: Unique scan identifier
-- `timestamp`: Scan timestamp
-- `github_owner`: Repository owner
-- `github_repo`: Repository name
-- `github_commit`: Commit hash
-- `findings`: Array of vulnerability findings
-- `scan_status`: Scan status (success/error)
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | STRING | Unique scan identifier |
+| `timestamp` | TIMESTAMP | Scan timestamp |
+| `github` | STRUCT | GitHub metadata (see below) |
+| `report` | STRUCT | Full Trivy JSON report (see below) |
 
-The schema is automatically updated as new vulnerability types are detected.
+### `github` STRUCT fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `github.owner` | STRING | Repository owner |
+| `github.repo_name` | STRING | Repository name |
+| `github.repo_id` | INTEGER | GitHub repository ID |
+| `github.commit_id` | STRING | Commit hash |
+| `github.branch` | STRING | Branch name |
+| `github.ref` | STRING | Git ref |
+| `github.committer` | STRUCT | Committer info (id, login, email) |
+
+### `report` STRUCT fields
+
+The `report` field contains the full Trivy JSON report structure:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `report.Results` | ARRAY | Array of scan results per target |
+| `report.Results[].Target` | STRING | Scanned target (e.g., file path) |
+| `report.Results[].Vulnerabilities` | ARRAY | Detected vulnerabilities |
+| `report.Results[].Packages` | ARRAY | Detected packages/dependencies |
+
+### Example Queries
+
+See the main [README.md](../../README.md#bigquery-queries) for example queries using this schema.
 
 ## Troubleshooting
 

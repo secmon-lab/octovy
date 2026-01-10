@@ -32,17 +32,40 @@ These functions can be used with GitHub Actions or deployed as a GitHub App. Sto
 
 ### `scan` - Scan and Insert
 
-Scans a local directory with Trivy and inserts results into BigQuery. Auto-detects git metadata (owner, repo, commit) from the local repository.
+Scans repositories with Trivy and inserts results into BigQuery. Has two subcommands:
+
+#### `scan local` - Scan Local Directory
+
+Scans a local directory. Auto-detects git metadata (owner, repo, commit) from the local repository.
 
 ```bash
 # Scan current directory
-octovy scan
+octovy scan local
 
 # Scan specific directory
-octovy scan --dir /path/to/code
+octovy scan local --dir /path/to/code
 
 # With explicit metadata
-octovy scan --github-owner myorg --github-repo myrepo --github-commit-id abc123
+octovy scan local --github-owner myorg --github-repo myrepo --github-commit-id abc123
+```
+
+#### `scan remote` - Scan GitHub Repository
+
+Scans a GitHub repository remotely via GitHub App API. Requires GitHub App configuration.
+
+```bash
+# Scan a specific repository
+octovy scan remote \
+  --github-owner myorg \
+  --github-repo myrepo \
+  --github-app-id 12345 \
+  --github-app-private-key "$(cat private-key.pem)"
+
+# Scan all repositories for an organization
+octovy scan remote \
+  --github-owner myorg \
+  --github-app-id 12345 \
+  --github-app-private-key "$(cat private-key.pem)"
 ```
 
 [Full documentation →](./docs/commands/scan.md)
@@ -167,7 +190,7 @@ ORDER BY vuln_count DESC
 
 ### Optional Setup
 
-- **[GitHub App Setup](./docs/setup/github-app.md)** - Required only for `serve` command
+- **[GitHub App Setup](./docs/setup/github-app.md)** - Required for `serve` and `scan remote` commands
 - **[Firestore Setup](./docs/setup/firestore.md)** - Optional for real-time metadata tracking
 
 ## Documentation

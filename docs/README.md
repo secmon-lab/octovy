@@ -4,7 +4,7 @@ Welcome to Octovy documentation! This guide covers setup and usage of all Octovy
 
 ## Getting Started
 
-Start with [Quick Start](../README.md#quick-start) in the main README.
+Start with [Overview](../README.md#overview) in the main README.
 
 ## Commands
 
