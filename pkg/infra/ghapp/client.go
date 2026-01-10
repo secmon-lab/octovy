@@ -150,8 +150,8 @@ func (x *Client) GetInstallationIDForOwner(ctx context.Context, owner string) (t
 	}
 
 	// Try organization installation first
-	installation, resp, err := client.Apps.FindOrganizationInstallation(ctx, owner)
-	if err == nil && installation != nil {
+	installation, resp, orgErr := client.Apps.FindOrganizationInstallation(ctx, owner)
+	if orgErr == nil && installation != nil {
 		logging.From(ctx).Info("Found organization installation",
 			slog.String("owner", owner),
 			slog.Int64("installID", installation.GetID()),
@@ -159,16 +159,29 @@ func (x *Client) GetInstallationIDForOwner(ctx context.Context, owner string) (t
 		return types.GitHubAppInstallID(installation.GetID()), nil
 	}
 
-	// If not found as org, try user installation
+	// If not found as org (404), try user installation
 	if resp != nil && resp.StatusCode == http.StatusNotFound {
-		installation, _, err = client.Apps.FindUserInstallation(ctx, owner)
-		if err == nil && installation != nil {
+		installation, _, userErr := client.Apps.FindUserInstallation(ctx, owner)
+		if userErr != nil {
+			return 0, goerr.Wrap(userErr, "failed to find user installation for owner",
+				goerr.V("owner", owner),
+			)
+		}
+
+		if installation != nil {
 			logging.From(ctx).Info("Found user installation",
 				slog.String("owner", owner),
 				slog.Int64("installID", installation.GetID()),
 			)
 			return types.GitHubAppInstallID(installation.GetID()), nil
 		}
+	}
+
+	// If org lookup failed with non-404 error, propagate it
+	if orgErr != nil {
+		return 0, goerr.Wrap(orgErr, "failed to find organization installation for owner",
+			goerr.V("owner", owner),
+		)
 	}
 
 	return 0, goerr.Wrap(types.ErrInvalidGitHubData, "installation not found for owner",
