@@ -141,9 +141,9 @@ SELECT
   vuln.PkgName,
   vuln.InstalledVersion,
   vuln.Severity
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE vuln.Severity = 'CRITICAL'
 ORDER BY timestamp DESC
 ```
@@ -158,60 +158,14 @@ SELECT DISTINCT
   github.repo_name,
   pkg.Name,
   pkg.Version
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Packages) AS pkg
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Packages) AS pkg
 WHERE LOWER(pkg.Name) LIKE '%log4j%'
 ORDER BY github.owner, github.repo_name
 ```
 
-### Count Vulnerabilities by Severity Across Organization
-
-```sql
-SELECT
-  vuln.Severity,
-  COUNT(*) AS count
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
-WHERE timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
-GROUP BY vuln.Severity
-ORDER BY count DESC
-```
-
-### Find Repositories with Specific CVE
-
-```sql
-SELECT DISTINCT
-  github.owner,
-  github.repo_name,
-  vuln.PkgName,
-  vuln.InstalledVersion,
-  vuln.FixedVersion
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
-WHERE vuln.VulnerabilityID = 'CVE-2021-44228'
-```
-
-### Latest Scan Results per Repository
-
-```sql
-SELECT
-  github.owner,
-  github.repo_name,
-  github.commit_id,
-  timestamp,
-  (SELECT COUNT(*) FROM UNNEST(report.Results) r, UNNEST(r.Vulnerabilities)) AS vuln_count
-FROM `your-project.octovy.scans` s
-WHERE timestamp = (
-  SELECT MAX(timestamp)
-  FROM `your-project.octovy.scans`
-  WHERE github.repo_name = s.github.repo_name
-    AND github.owner = s.github.owner
-)
-ORDER BY vuln_count DESC
-```
+For more query examples and detailed schema documentation, see [BigQuery Schema Reference](./docs/schema/scans.md).
 
 ## Setup Guides
 

@@ -302,6 +302,19 @@ Typical costs are very low for small-scale usage.
 2. Check the setup guide for your backend (BigQuery, Firestore, GitHub App)
 3. Review server logs: `octovy serve --log-format json`
 
+## Schema Reference
+
+### [BigQuery Scans Table](./schema/scans.md)
+
+Complete documentation for the `scans` table in BigQuery:
+
+- Field descriptions for all nested structures
+- Dynamic fields (CVSS, VendorSeverity) explained
+- Query examples for common use cases
+- Best practices for query performance
+
+[Full schema reference →](./schema/scans.md)
+
 ## Related Resources
 
 - [Octovy Repository](https://github.com/secmon-lab/octovy)
