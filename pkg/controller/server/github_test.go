@@ -10,7 +10,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/m-mizutani/gt"
@@ -19,6 +21,23 @@ import (
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 )
+
+// waitWithTimeout waits for the WaitGroup with a timeout.
+// It fails the test if the timeout is reached before the WaitGroup is done.
+func waitWithTimeout(t *testing.T, wg *sync.WaitGroup, timeout time.Duration) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// Success
+	case <-time.After(timeout):
+		t.Fatal("timeout waiting for background goroutine to complete")
+	}
+}
 
 //go:embed testdata/github/pull_request.opened.json
 var testGitHubPullRequestOpened []byte
@@ -46,22 +65,33 @@ func TestGitHubPullRequestSync(t *testing.T) {
 
 	runTest := func(tc testCase) func(t *testing.T) {
 		return func(t *testing.T) {
-			mock := &mock.UseCaseMock{
+			var wg sync.WaitGroup
+			if tc.input != nil {
+				wg.Add(1)
+			}
+
+			mockUC := &mock.UseCaseMock{
 				ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
+					defer wg.Done()
 					gt.V(t, input).Equal(tc.input)
 					return nil
 				},
 			}
 
-			serv := server.New(mock, server.WithGitHubSecret(secret))
+			serv := server.New(mockUC, server.WithGitHubSecret(secret))
 			req := newGitHubWebhookRequest(t, tc.event, tc.body, secret)
 			w := httptest.NewRecorder()
 			serv.Mux().ServeHTTP(w, req)
-			gt.V(t, w.Code).Equal(http.StatusOK)
+
 			if tc.input != nil {
-				gt.A(t, mock.ScanGitHubRepoCalls()).Length(1)
+				// When scan is required, expect 202 Accepted and wait for background goroutine
+				gt.V(t, w.Code).Equal(http.StatusAccepted)
+				waitWithTimeout(t, &wg, 5*time.Second)
+				gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(1)
 			} else {
-				gt.A(t, mock.ScanGitHubRepoCalls()).Length(0)
+				// When no scan is required, expect 200 OK
+				gt.V(t, w.Code).Equal(http.StatusOK)
+				gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(0)
 			}
 		}
 	}
@@ -258,9 +288,13 @@ func TestGitHubInvalidSignature(t *testing.T) {
 		gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(0)
 	})
 
-	t.Run("UseCase error propagates to 500", func(t *testing.T) {
+	t.Run("UseCase error does not affect HTTP response (background processing)", func(t *testing.T) {
+		var wg sync.WaitGroup
+		wg.Add(1)
+
 		mockUC := &mock.UseCaseMock{
 			ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
+				defer wg.Done()
 				return errors.New("intentional error")
 			},
 		}
@@ -272,7 +306,39 @@ func TestGitHubInvalidSignature(t *testing.T) {
 		rec := httptest.NewRecorder()
 		srv.Mux().ServeHTTP(rec, req)
 
-		gt.V(t, rec.Code).Equal(http.StatusInternalServerError)
+		// HTTP response should be 202 Accepted even if UseCase fails
+		// because the scan runs in the background
+		gt.V(t, rec.Code).Equal(http.StatusAccepted)
+
+		// Wait for background goroutine to complete
+		waitWithTimeout(t, &wg, 5*time.Second)
+		gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(1)
+	})
+
+	t.Run("UseCase panic is recovered and does not crash server", func(t *testing.T) {
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		mockUC := &mock.UseCaseMock{
+			ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
+				defer wg.Done()
+				panic("intentional panic for testing")
+			},
+		}
+
+		srv := server.New(mockUC, server.WithGitHubSecret(secret))
+
+		req := newGitHubWebhookRequest(t, "push", testGitHubPush, secret)
+
+		rec := httptest.NewRecorder()
+		srv.Mux().ServeHTTP(rec, req)
+
+		// HTTP response should be 202 Accepted even if UseCase panics
+		// because the panic is recovered in the background goroutine
+		gt.V(t, rec.Code).Equal(http.StatusAccepted)
+
+		// Wait for background goroutine to complete (including panic recovery)
+		waitWithTimeout(t, &wg, 5*time.Second)
 		gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(1)
 	})
 }
