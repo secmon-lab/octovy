@@ -115,8 +115,8 @@ func runInsert(ctx context.Context, resultFile string, meta model.GitHubMetadata
 	if err != nil {
 		return goerr.Wrap(err, "failed to create BigQuery client")
 	}
-	if bqClient == nil {
-		return goerr.New("BigQuery client is required (project ID and dataset ID must be set)")
+	if err := requireBigQuery(bqClient); err != nil {
+		return err
 	}
 
 	// Create Firestore repository if configured

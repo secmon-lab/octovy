@@ -89,8 +89,8 @@ func serveCommand() *cli.Command {
 			if err != nil {
 				return err
 			}
-			if bqClient == nil {
-				return goerr.New("BigQuery client is required (project ID and dataset ID must be set)")
+			if err := requireBigQuery(bqClient); err != nil {
+				return err
 			}
 			infraOptions = append(infraOptions, infra.WithBigQuery(bqClient))
 
