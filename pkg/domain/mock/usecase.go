@@ -8,6 +8,7 @@ import (
 	"github.com/m-mizutani/octovy/pkg/domain/interfaces"
 	"github.com/m-mizutani/octovy/pkg/domain/model"
 	"github.com/m-mizutani/octovy/pkg/domain/model/trivy"
+	"github.com/m-mizutani/octovy/pkg/domain/types"
 	"sync"
 )
 
@@ -21,7 +22,7 @@ var _ interfaces.UseCase = &UseCaseMock{}
 //
 //		// make and configure a mocked interfaces.UseCase
 //		mockedUseCase := &UseCaseMock{
-//			InsertScanResultFunc: func(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) error {
+//			InsertScanResultFunc: func(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) (types.ScanID, error) {
 //				panic("mock out the InsertScanResult method")
 //			},
 //			ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
@@ -35,7 +36,7 @@ var _ interfaces.UseCase = &UseCaseMock{}
 //	}
 type UseCaseMock struct {
 	// InsertScanResultFunc mocks the InsertScanResult method.
-	InsertScanResultFunc func(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) error
+	InsertScanResultFunc func(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) (types.ScanID, error)
 
 	// ScanGitHubRepoFunc mocks the ScanGitHubRepo method.
 	ScanGitHubRepoFunc func(ctx context.Context, input *model.ScanGitHubRepoInput) error
@@ -64,7 +65,7 @@ type UseCaseMock struct {
 }
 
 // InsertScanResult calls InsertScanResultFunc.
-func (mock *UseCaseMock) InsertScanResult(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) error {
+func (mock *UseCaseMock) InsertScanResult(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) (types.ScanID, error) {
 	if mock.InsertScanResultFunc == nil {
 		panic("UseCaseMock.InsertScanResultFunc: method is nil but UseCase.InsertScanResult was just called")
 	}

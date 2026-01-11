@@ -141,11 +141,12 @@ func runInsert(ctx context.Context, resultFile string, meta model.GitHubMetadata
 	uc := usecase.New(clients)
 
 	// Insert scan result to BigQuery and Firestore
-	if err := uc.InsertScanResult(ctx, meta, *report); err != nil {
+	scanID, err := uc.InsertScanResult(ctx, meta, *report)
+	if err != nil {
 		return goerr.Wrap(err, "failed to insert scan result")
 	}
 
-	logging.Default().Info("Insert completed successfully")
+	logging.Default().Info("Insert completed successfully", slog.String("scan_id", scanID.String()))
 
 	return nil
 }

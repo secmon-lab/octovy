@@ -14,7 +14,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/m-mizutani/bqs v0.1.0
-	github.com/m-mizutani/clog v0.1.0
+	github.com/m-mizutani/clog v0.2.0
 	github.com/m-mizutani/goerr/v2 v2.0.0
 	github.com/m-mizutani/gots v0.0.0-20230529013424-0639119b2cdd
 	github.com/m-mizutani/gt v0.1.2

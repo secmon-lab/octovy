@@ -240,9 +240,11 @@ func (x *UseCase) ScanAndInsert(ctx context.Context, dir string, meta model.GitH
 	}
 	logging.From(ctx).Info("scan finished", "owner", meta.Owner, "repo", meta.RepoName, "commit", meta.CommitID)
 
-	if err := x.InsertScanResult(ctx, meta, *report); err != nil {
+	scanID, err := x.InsertScanResult(ctx, meta, *report)
+	if err != nil {
 		return err
 	}
+	logging.From(ctx).Info("scan result inserted", "scan_id", scanID)
 
 	return nil
 }
