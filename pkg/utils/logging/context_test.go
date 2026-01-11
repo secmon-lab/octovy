@@ -91,3 +91,63 @@ func TestCtxWithTime(t *testing.T) {
 		gt.V(t, tm.Year()).Equal(2024)
 	})
 }
+
+func TestInheritContextValues(t *testing.T) {
+	t.Run("inherit request ID from source context", func(t *testing.T) {
+		srcCtx := context.Background()
+		reqID, srcCtx := logging.CtxRequestID(srcCtx)
+
+		dstCtx := context.Background()
+		dstCtx = logging.InheritContextValues(dstCtx, srcCtx)
+
+		inheritedID, _ := logging.CtxRequestID(dstCtx)
+		gt.V(t, inheritedID).Equal(reqID)
+	})
+
+	t.Run("inherit time function from source context", func(t *testing.T) {
+		srcCtx := context.Background()
+		fixedTime := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+		srcCtx = logging.CtxWithTime(srcCtx, func() time.Time {
+			return fixedTime
+		})
+
+		dstCtx := context.Background()
+		dstCtx = logging.InheritContextValues(dstCtx, srcCtx)
+
+		inheritedTime := logging.CtxTime(dstCtx)
+		gt.V(t, inheritedTime).Equal(fixedTime)
+	})
+
+	t.Run("inherit both request ID and time function", func(t *testing.T) {
+		srcCtx := context.Background()
+		reqID, srcCtx := logging.CtxRequestID(srcCtx)
+		fixedTime := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+		srcCtx = logging.CtxWithTime(srcCtx, func() time.Time {
+			return fixedTime
+		})
+
+		dstCtx := context.Background()
+		dstCtx = logging.InheritContextValues(dstCtx, srcCtx)
+
+		inheritedID, _ := logging.CtxRequestID(dstCtx)
+		gt.V(t, inheritedID).Equal(reqID)
+
+		inheritedTime := logging.CtxTime(dstCtx)
+		gt.V(t, inheritedTime).Equal(fixedTime)
+	})
+
+	t.Run("handle empty source context", func(t *testing.T) {
+		srcCtx := context.Background()
+		dstCtx := context.Background()
+
+		dstCtx = logging.InheritContextValues(dstCtx, srcCtx)
+
+		// Should not panic and should generate new request ID when accessed
+		newReqID, _ := logging.CtxRequestID(dstCtx)
+		gt.V(t, newReqID).NotEqual("")
+
+		// Time should return current time (not zero)
+		tm := logging.CtxTime(dstCtx)
+		gt.V(t, tm.IsZero()).Equal(false)
+	})
+}

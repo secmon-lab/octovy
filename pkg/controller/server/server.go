@@ -52,13 +52,29 @@ func New(uc interfaces.UseCase, options ...Option) *Server {
 	r.Route("/webhook", func(r chi.Router) {
 		r.Route("/github", func(r chi.Router) {
 			r.Post("/app", func(w http.ResponseWriter, r *http.Request) {
-				if err := handleGitHubAppEvent(uc, r, cfg.ghSecret); err != nil {
-					errutil.HandleError(r.Context(), "fail to handle GitHub App event", err)
+				// Validate and parse the webhook event synchronously
+				result, err := validateGitHubAppEvent(r, cfg.ghSecret)
+				if err != nil {
+					errutil.HandleError(r.Context(), "fail to validate GitHub App event", err)
 					safeWrite(w, http.StatusInternalServerError, []byte(err.Error()))
 					return
 				}
 
-				safeWrite(w, http.StatusOK, []byte("ok"))
+				// If no scan is required, return immediately
+				if result.ScanInput == nil {
+					safeWrite(w, http.StatusOK, []byte(`{"status":"ok","message":"no scan required"}`))
+					return
+				}
+
+				// Create a detached context for background processing
+				// The original request context will be cancelled when the HTTP response is sent
+				bgCtx := DetachContext(r.Context())
+
+				// Start background scan
+				go runGitHubRepoScan(bgCtx, uc, result.ScanInput)
+
+				// Return immediately with 202 Accepted
+				safeWrite(w, http.StatusAccepted, []byte(`{"status":"accepted","message":"scan enqueued"}`))
 			})
 			r.Post("/action", func(w http.ResponseWriter, r *http.Request) {
 				if err := handleGitHubActionEvent(uc, r); err != nil {

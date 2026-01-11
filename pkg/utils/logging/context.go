@@ -50,3 +50,21 @@ func CtxTime(ctx context.Context) time.Time {
 func CtxWithTime(ctx context.Context, timeFunc TimeFunc) context.Context {
 	return context.WithValue(ctx, ctxTimeKey{}, timeFunc)
 }
+
+// InheritContextValues copies request ID and time function from src context to dst context.
+// This is useful when creating a background context that should inherit values from
+// the original HTTP request context. Note that logger is NOT copied by this function;
+// use With() separately to copy the logger.
+func InheritContextValues(dst, src context.Context) context.Context {
+	// Copy request ID if exists
+	if reqID, ok := src.Value(ctxRequestIDKey{}).(types.RequestID); ok {
+		dst = context.WithValue(dst, ctxRequestIDKey{}, reqID)
+	}
+
+	// Copy time function if exists
+	if timeFunc, ok := src.Value(ctxTimeKey{}).(TimeFunc); ok {
+		dst = context.WithValue(dst, ctxTimeKey{}, timeFunc)
+	}
+
+	return dst
+}

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -14,32 +15,46 @@ import (
 	"github.com/m-mizutani/octovy/pkg/utils/logging"
 )
 
-func handleGitHubAppEvent(uc interfaces.UseCase, r *http.Request, key types.GitHubAppSecret) error {
+// handleGitHubAppEventResult represents the result of validating and parsing a GitHub App event.
+// If ScanInput is nil, no scan is required (either no scan needed or validation failed).
+type handleGitHubAppEventResult struct {
+	ScanInput *model.ScanGitHubRepoInput
+}
+
+// validateGitHubAppEvent validates and parses a GitHub App webhook event.
+// It returns the scan input if a scan is required, or nil if no scan is needed.
+// This function is synchronous and should be called before starting background processing.
+func validateGitHubAppEvent(r *http.Request, key types.GitHubAppSecret) (*handleGitHubAppEventResult, error) {
 	ctx := r.Context()
 	payload, err := github.ValidatePayload(r, []byte(key))
 	if err != nil {
-		return goerr.Wrap(err, "validating payload")
+		return nil, goerr.Wrap(err, "validating payload")
 	}
 
 	event, err := github.ParseWebHook(github.WebHookType(r), payload)
 	if err != nil {
-		return goerr.Wrap(err, "parsing webhook")
+		return nil, goerr.Wrap(err, "parsing webhook")
 	}
 
 	logging.From(ctx).With(slog.Any("event", event)).Info("Received GitHub App event")
 
 	scanInput := githubEventToScanInput(event)
-	if scanInput == nil {
-		return nil
+	return &handleGitHubAppEventResult{ScanInput: scanInput}, nil
+}
+
+// runGitHubRepoScan executes the GitHub repository scan in the provided context.
+// This function is designed to be called from a background goroutine.
+func runGitHubRepoScan(ctx context.Context, uc interfaces.UseCase, scanInput *model.ScanGitHubRepoInput) {
+	logging.From(ctx).With(slog.Any("input", scanInput)).Info("Starting GitHub repository scan")
+
+	if err := uc.ScanGitHubRepo(ctx, scanInput); err != nil {
+		logging.From(ctx).Error("Background scan failed",
+			slog.Any("error", err),
+			slog.Any("input", scanInput),
+		)
+	} else {
+		logging.From(ctx).Info("GitHub repository scan completed successfully")
 	}
-
-	logging.Default().With(slog.Any("input", scanInput)).Info("Scan GitHub repository")
-
-	if err := uc.ScanGitHubRepo(r.Context(), scanInput); err != nil {
-		return goerr.Wrap(err, "failed to scan GitHub repository")
-	}
-
-	return nil
 }
 
 func refToBranch(v string) string {
