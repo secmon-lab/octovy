@@ -45,15 +45,13 @@ func validateGitHubAppEvent(r *http.Request, key types.GitHubAppSecret) (*handle
 // runGitHubRepoScan executes the GitHub repository scan in the provided context.
 // This function is designed to be called from a background goroutine.
 func runGitHubRepoScan(ctx context.Context, uc interfaces.UseCase, scanInput *model.ScanGitHubRepoInput) {
-	logging.From(ctx).With(slog.Any("input", scanInput)).Info("Starting GitHub repository scan")
+	logger := logging.From(ctx).With(slog.Any("input", scanInput))
+	logger.Info("Starting GitHub repository scan")
 
 	if err := uc.ScanGitHubRepo(ctx, scanInput); err != nil {
-		logging.From(ctx).Error("Background scan failed",
-			slog.Any("error", err),
-			slog.Any("input", scanInput),
-		)
+		logger.Error("Background scan failed", slog.Any("error", err))
 	} else {
-		logging.From(ctx).Info("GitHub repository scan completed successfully")
+		logger.Info("GitHub repository scan completed successfully")
 	}
 }
 
