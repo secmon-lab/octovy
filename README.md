@@ -136,12 +136,14 @@ Once scan results are in BigQuery, you can run powerful queries for vulnerabilit
 SELECT
   github.owner,
   github.repo_name,
+  github.commit_id,
   vuln.VulnerabilityID,
   vuln.PkgName,
+  vuln.InstalledVersion,
   vuln.Severity
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE vuln.Severity = 'CRITICAL'
 ORDER BY timestamp DESC
 ```
@@ -156,9 +158,9 @@ SELECT DISTINCT
   github.repo_name,
   pkg.Name,
   pkg.Version
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Packages) AS pkg
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Packages) AS pkg
 WHERE LOWER(pkg.Name) LIKE '%log4j%'
 ORDER BY github.owner, github.repo_name
 ```

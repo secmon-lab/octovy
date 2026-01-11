@@ -139,9 +139,9 @@ SELECT
   vuln.VulnerabilityID,
   vuln.CVSS.ghsa.V3Score AS ghsa_score,
   vuln.CVSS.nvd.V3Score AS nvd_score
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE vuln.CVSS.ghsa.V3Score >= 9.0
    OR vuln.CVSS.nvd.V3Score >= 9.0
 ```
@@ -156,9 +156,9 @@ SELECT
   vuln.VulnerabilityID,
   vuln.VendorSeverity.ghsa AS ghsa_severity,
   vuln.VendorSeverity.nvd AS nvd_severity
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 ```
 
 ### Custom Fields
@@ -178,13 +178,8 @@ SELECT
   github.branch,
   timestamp,
   id AS scan_id
-FROM `your-project.octovy.scans` s
-WHERE timestamp = (
-  SELECT MAX(timestamp)
-  FROM `your-project.octovy.scans`
-  WHERE github.owner = s.github.owner
-    AND github.repo_name = s.github.repo_name
-)
+FROM `your-project.octovy.scans`
+QUALIFY ROW_NUMBER() OVER(PARTITION BY github.owner, github.repo_name ORDER BY timestamp DESC) = 1
 ORDER BY timestamp DESC
 ```
 
@@ -215,9 +210,9 @@ SELECT
   vuln.InstalledVersion,
   vuln.FixedVersion,
   vuln.Severity
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE vuln.Severity = 'CRITICAL'
 ORDER BY timestamp DESC
 ```
@@ -231,9 +226,9 @@ SELECT DISTINCT
   vuln.PkgName,
   vuln.InstalledVersion,
   vuln.FixedVersion
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE vuln.VulnerabilityID = 'CVE-2021-44228'
 ```
 
@@ -243,9 +238,9 @@ WHERE vuln.VulnerabilityID = 'CVE-2021-44228'
 SELECT
   vuln.Severity,
   COUNT(*) AS count
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
 GROUP BY vuln.Severity
 ORDER BY
@@ -268,9 +263,9 @@ SELECT
   vuln.PkgName,
   vuln.Severity,
   vuln.CVSS.nvd.V3Score AS cvss_score
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE vuln.CVSS.nvd.V3Score >= 9.0
 ORDER BY vuln.CVSS.nvd.V3Score DESC
 ```
@@ -288,9 +283,9 @@ SELECT DISTINCT
   pkg.Name,
   pkg.Version,
   result.Target
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Packages) AS pkg
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Packages) AS pkg
 WHERE LOWER(pkg.Name) LIKE '%log4j%'
 ORDER BY github.owner, github.repo_name
 ```
@@ -303,17 +298,12 @@ SELECT DISTINCT
   pkg.Version,
   result.Type AS package_type,
   result.Target
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Packages) AS pkg
-WHERE github.owner = 'your-org'
-  AND github.repo_name = 'your-repo'
-  AND timestamp = (
-    SELECT MAX(timestamp)
-    FROM `your-project.octovy.scans`
-    WHERE github.owner = 'your-org'
-      AND github.repo_name = 'your-repo'
-  )
+FROM `your-project.octovy.scans` s
+CROSS JOIN UNNEST(s.report.Results) AS result
+CROSS JOIN UNNEST(result.Packages) AS pkg
+WHERE s.github.owner = 'your-org'
+  AND s.github.repo_name = 'your-repo'
+QUALIFY ROW_NUMBER() OVER (ORDER BY s.timestamp DESC) = 1
 ORDER BY result.Target, pkg.Name
 ```
 
@@ -327,9 +317,9 @@ SELECT
   vuln.InstalledVersion,
   vuln.FixedVersion,
   vuln.VulnerabilityID
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE vuln.FixedVersion IS NOT NULL
   AND vuln.FixedVersion != ''
   AND timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 DAY)
@@ -360,9 +350,9 @@ FROM `your-project.octovy.scans` s
 JOIN latest_scans l
   ON s.github.owner = l.owner
   AND s.github.repo_name = l.repo_name
-  AND s.timestamp = l.latest_timestamp,
-  UNNEST(s.report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+  AND s.timestamp = l.latest_timestamp
+CROSS JOIN UNNEST(s.report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 GROUP BY s.github.owner, s.github.repo_name
 ORDER BY critical_count DESC, high_count DESC
 ```
@@ -375,9 +365,9 @@ SELECT
   vuln.Severity,
   COUNT(DISTINCT CONCAT(github.owner, '/', github.repo_name)) AS affected_repos,
   ANY_VALUE(vuln.Title) AS title
-FROM `your-project.octovy.scans`,
-  UNNEST(report.Results) AS result,
-  UNNEST(result.Vulnerabilities) AS vuln
+FROM `your-project.octovy.scans`
+CROSS JOIN UNNEST(report.Results) AS result
+CROSS JOIN UNNEST(result.Vulnerabilities) AS vuln
 WHERE timestamp > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
 GROUP BY vuln.VulnerabilityID, vuln.Severity
 ORDER BY affected_repos DESC
