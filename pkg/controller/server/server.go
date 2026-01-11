@@ -70,8 +70,18 @@ func New(uc interfaces.UseCase, options ...Option) *Server {
 				// The original request context will be cancelled when the HTTP response is sent
 				bgCtx := DetachContext(r.Context())
 
-				// Start background scan
-				go runGitHubRepoScan(bgCtx, uc, result.ScanInput)
+				// Start background scan with panic recovery
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							logging.From(bgCtx).Error("recovered from panic in background scan",
+								slog.Any("panic", r),
+								slog.Any("input", result.ScanInput),
+							)
+						}
+					}()
+					runGitHubRepoScan(bgCtx, uc, result.ScanInput)
+				}()
 
 				// Return immediately with 202 Accepted
 				safeWrite(w, http.StatusAccepted, []byte(`{"status":"accepted","message":"scan enqueued"}`))

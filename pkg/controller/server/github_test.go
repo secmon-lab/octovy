@@ -314,4 +314,31 @@ func TestGitHubInvalidSignature(t *testing.T) {
 		waitWithTimeout(t, &wg, 5*time.Second)
 		gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(1)
 	})
+
+	t.Run("UseCase panic is recovered and does not crash server", func(t *testing.T) {
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		mockUC := &mock.UseCaseMock{
+			ScanGitHubRepoFunc: func(ctx context.Context, input *model.ScanGitHubRepoInput) error {
+				defer wg.Done()
+				panic("intentional panic for testing")
+			},
+		}
+
+		srv := server.New(mockUC, server.WithGitHubSecret(secret))
+
+		req := newGitHubWebhookRequest(t, "push", testGitHubPush, secret)
+
+		rec := httptest.NewRecorder()
+		srv.Mux().ServeHTTP(rec, req)
+
+		// HTTP response should be 202 Accepted even if UseCase panics
+		// because the panic is recovered in the background goroutine
+		gt.V(t, rec.Code).Equal(http.StatusAccepted)
+
+		// Wait for background goroutine to complete (including panic recovery)
+		waitWithTimeout(t, &wg, 5*time.Second)
+		gt.A(t, mockUC.ScanGitHubRepoCalls()).Length(1)
+	})
 }
