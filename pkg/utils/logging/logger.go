@@ -8,6 +8,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/m-mizutani/clog"
+	"github.com/m-mizutani/clog/hooks"
 	"github.com/m-mizutani/goerr/v2"
 	"github.com/m-mizutani/masq"
 	"github.com/m-mizutani/octovy/pkg/domain/types"
@@ -79,6 +80,7 @@ func Configure(logFormat, logLevel, logOutput string) error {
 				AttrKey:      color.New(color.FgHiCyan),
 				AttrValue:    color.New(color.FgHiWhite),
 			}),
+			clog.WithAttrHook(hooks.GoErr()),
 			clog.WithReplaceAttr(filter),
 		)
 

@@ -75,7 +75,9 @@ func TestInsertScanResult(t *testing.T) {
 			},
 		}
 
-		gt.NoError(t, uc.InsertScanResult(ctx, meta, report))
+		scanID, err := uc.InsertScanResult(ctx, meta, report)
+		gt.NoError(t, err)
+		gt.V(t, scanID).NotEqual(types.ScanID(""))
 
 		gt.True(t, bqInsertCalled)
 
@@ -143,7 +145,8 @@ func TestInsertScanResult(t *testing.T) {
 			Results:       trivy.Results{},
 		}
 
-		gt.NoError(t, uc.InsertScanResult(ctx, meta, report))
+		_, err := uc.InsertScanResult(ctx, meta, report)
+		gt.NoError(t, err)
 
 		gt.True(t, insertCalled)
 	})
@@ -185,7 +188,8 @@ func TestInsertScanResult(t *testing.T) {
 		}
 		report := trivy.Report{SchemaVersion: 2, ArtifactName: "test-artifact", Results: trivy.Results{}}
 
-		gt.NoError(t, uc.InsertScanResult(ctx, meta, report))
+		_, err := uc.InsertScanResult(ctx, meta, report)
+		gt.NoError(t, err)
 		gt.True(t, createTableCalled)
 	})
 
@@ -250,7 +254,8 @@ func TestInsertScanResult(t *testing.T) {
 			},
 		}
 
-		gt.NoError(t, uc.InsertScanResult(ctx, meta, report))
+		_, err := uc.InsertScanResult(ctx, meta, report)
+		gt.NoError(t, err)
 		gt.V(t, insertedData).NotEqual(nil)
 	})
 
@@ -314,7 +319,8 @@ func TestInsertScanResult(t *testing.T) {
 			},
 		}
 
-		gt.NoError(t, uc.InsertScanResult(ctx, meta, report1))
+		_, err := uc.InsertScanResult(ctx, meta, report1)
+		gt.NoError(t, err)
 
 		vulns, err := memRepo.ListVulnerabilities(ctx, repoID, branchName, targetID)
 		gt.NoError(t, err)
@@ -323,7 +329,8 @@ func TestInsertScanResult(t *testing.T) {
 		gt.V(t, vulns[0].Status).Equal(types.VulnStatusActive)
 
 		// Scenario 2: Second scan - continuous detection should keep status
-		gt.NoError(t, uc.InsertScanResult(ctx, meta, report1))
+		_, err = uc.InsertScanResult(ctx, meta, report1)
+		gt.NoError(t, err)
 
 		vulns, err = memRepo.ListVulnerabilities(ctx, repoID, branchName, targetID)
 		gt.NoError(t, err)
@@ -344,7 +351,8 @@ func TestInsertScanResult(t *testing.T) {
 			},
 		}
 
-		gt.NoError(t, uc.InsertScanResult(ctx, meta, report2))
+		_, err = uc.InsertScanResult(ctx, meta, report2)
+		gt.NoError(t, err)
 
 		vulns, err = memRepo.ListVulnerabilities(ctx, repoID, branchName, targetID)
 		gt.NoError(t, err)
@@ -352,7 +360,8 @@ func TestInsertScanResult(t *testing.T) {
 		gt.V(t, vulns[0].Status).Equal(types.VulnStatusFixed)
 
 		// Scenario 4: Fourth scan - re-detection (Fixed → Active)
-		gt.NoError(t, uc.InsertScanResult(ctx, meta, report1))
+		_, err = uc.InsertScanResult(ctx, meta, report1)
+		gt.NoError(t, err)
 
 		vulns, err = memRepo.ListVulnerabilities(ctx, repoID, branchName, targetID)
 		gt.NoError(t, err)

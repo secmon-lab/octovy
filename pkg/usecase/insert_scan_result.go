@@ -13,9 +13,9 @@ import (
 	"github.com/m-mizutani/octovy/pkg/domain/types"
 )
 
-func (x *UseCase) InsertScanResult(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) error {
+func (x *UseCase) InsertScanResult(ctx context.Context, meta model.GitHubMetadata, report trivy.Report) (types.ScanID, error) {
 	if err := report.Validate(); err != nil {
-		return goerr.Wrap(err, "invalid trivy report")
+		return "", goerr.Wrap(err, "invalid trivy report")
 	}
 
 	scan := &model.Scan{
@@ -29,7 +29,7 @@ func (x *UseCase) InsertScanResult(ctx context.Context, meta model.GitHubMetadat
 	if x.clients.BigQuery() != nil {
 		schema, schemaUpdated, err := createOrUpdateBigQueryTable(ctx, x.clients.BigQuery(), scan)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		rawRecord := &model.ScanRawRecord{
@@ -38,18 +38,18 @@ func (x *UseCase) InsertScanResult(ctx context.Context, meta model.GitHubMetadat
 		}
 
 		if err := x.clients.BigQuery().Insert(ctx, schema, rawRecord, interfaces.WithRetry(schemaUpdated)); err != nil {
-			return goerr.Wrap(err, "failed to insert scan data to BigQuery")
+			return "", goerr.Wrap(err, "failed to insert scan data to BigQuery")
 		}
 	}
 
 	// Insert to Firestore
 	if x.clients.ScanRepository() != nil {
 		if err := x.insertToFirestore(ctx, meta, scan, report); err != nil {
-			return goerr.Wrap(err, "failed to insert scan data to Firestore")
+			return "", goerr.Wrap(err, "failed to insert scan data to Firestore")
 		}
 	}
 
-	return nil
+	return scan.ID, nil
 }
 
 func createOrUpdateBigQueryTable(ctx context.Context, bq interfaces.BigQuery, scan *model.Scan) (schema bigquery.Schema, schemaUpdated bool, err error) {

@@ -35,6 +35,7 @@ func (x *BigQuery) Flags() []cli.Flag {
 			Category:    "BigQuery",
 			Destination: (*string)(&x.datasetID),
 			Sources:     cli.EnvVars("OCTOVY_BIGQUERY_DATASET_ID"),
+			Value:       "octovy",
 		},
 		&cli.StringFlag{
 			Name:        "bigquery-table-id",

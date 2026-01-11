@@ -85,11 +85,14 @@ func serveCommand() *cli.Command {
 				infra.WithTrivy(trivy.New(trivyPath)),
 			}
 
-			if bqClient, err := bigQuery.NewClient(ctx); err != nil {
+			bqClient, err := bigQuery.NewClient(ctx)
+			if err != nil {
 				return err
-			} else if bqClient != nil {
-				infraOptions = append(infraOptions, infra.WithBigQuery(bqClient))
 			}
+			if err := requireBigQuery(bqClient); err != nil {
+				return err
+			}
+			infraOptions = append(infraOptions, infra.WithBigQuery(bqClient))
 
 			if firestore.Enabled() {
 				repo, err := firestore.NewRepository(ctx)

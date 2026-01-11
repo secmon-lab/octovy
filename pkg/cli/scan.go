@@ -185,6 +185,20 @@ type scanRemoteParams struct {
 }
 
 func runScanRemote(ctx context.Context, params *scanRemoteParams) error {
+	// Log scan configuration
+	logging.Default().Info("Starting remote scan",
+		slog.String("github_owner", params.owner),
+		slog.String("github_repo", params.repo),
+		slog.String("github_commit", params.commit),
+		slog.String("github_branch", params.branch),
+		slog.Int64("github_app_installation_id", params.installIDRaw),
+		slog.String("trivy_path", params.trivyPath),
+		slog.Bool("scan_all", params.scanAll),
+		slog.Any("bigquery", params.bigQuery),
+		slog.Any("github_app", params.githubApp),
+		slog.Bool("firestore_enabled", params.firestore.Enabled()),
+	)
+
 	// Create GitHub App client
 	ghClient, err := params.githubApp.New()
 	if err != nil {
@@ -195,6 +209,9 @@ func runScanRemote(ctx context.Context, params *scanRemoteParams) error {
 	bqClient, err := params.bigQuery.NewClient(ctx)
 	if err != nil {
 		return goerr.Wrap(err, "failed to create BigQuery client")
+	}
+	if err := requireBigQuery(bqClient); err != nil {
+		return err
 	}
 
 	// Create Firestore repository if configured
@@ -279,6 +296,9 @@ func runScanLocal(ctx context.Context, dir, trivyPath string, meta model.GitHubM
 	bqClient, err := bigQuery.NewClient(ctx)
 	if err != nil {
 		return goerr.Wrap(err, "failed to create BigQuery client")
+	}
+	if err := requireBigQuery(bqClient); err != nil {
+		return err
 	}
 
 	// Create Firestore repository if configured

@@ -69,6 +69,17 @@ The `infra.Clients` struct aggregates all infrastructure dependencies (GitHubApp
 
 ## Development Commands
 
+### Syntax Check (IMPORTANT)
+**CRITICAL**: During development, use `go vet` for syntax checking. Do NOT use `go build` until all implementation is complete.
+
+```bash
+# Syntax check (USE THIS during development)
+go vet ./...
+
+# Build (ONLY when all implementation is complete and ready for final verification)
+go build ./...
+```
+
 ### Testing
 ```bash
 # Run all tests
@@ -79,18 +90,14 @@ go test ./pkg/usecase
 
 # Run specific test
 go test ./pkg/usecase -run TestScanGitHubRepo
-
-# Vet code
-go vet ./...
 ```
 
-### Mock Generation
-```bash
-# Regenerate all mocks (uses moq via go generate)
-task gen
+### Mock Generation (IMPORTANT)
+**CRITICAL**: Always use `task gen` for mock generation. Do NOT use `go generate` directly.
 
-# Alternative: run go generate directly
-go generate ./...
+```bash
+# Regenerate all mocks (ALWAYS use this)
+task gen
 ```
 
 ## Coding Rules
