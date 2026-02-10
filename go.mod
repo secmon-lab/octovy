@@ -9,7 +9,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/getsentry/sentry-go v0.40.0
 	github.com/go-chi/chi/v5 v5.2.3
-	github.com/go-git/go-git/v5 v5.16.4
+	github.com/go-git/go-git/v5 v5.16.5
 	github.com/google/go-github/v53 v53.2.0
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
