@@ -21,7 +21,7 @@ require (
 	github.com/m-mizutani/masq v0.2.1
 	github.com/urfave/cli/v3 v3.6.1
 	google.golang.org/api v0.258.0
-	google.golang.org/grpc v1.78.0
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 )
 
